@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Inventaire des contenus (API WordPress si disponible), des pages, des liens, des images (avec
+# leur poids) et des vidéos YouTube (disponibilité vérifiée par oEmbed).
+#
+# Usage : bin/inventaire URL [--pages FICHIER] [--max N] [--dossier DOSSIER]
+#   --pages  pages à analyser (défaut : pages HTML de bin/sf-crawl ou bin/seo, sinon le sitemap)
+#   --max    nombre maximal de pages
+#
+# Sortie : inventaire/contenus.csv, pages_html.json, liens.csv, medias.csv, videos.csv, resume.json
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--pages --max"
+lire_arguments "$@"
+preparer_sortie inventaire
+"$PYTHON" -m inventaire "$SITE_URL" "$(pages_a_auditer)" "$SORTIE"

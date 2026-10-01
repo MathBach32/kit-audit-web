@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# En-têtes HTTP et de sécurité, redirections des variantes d'adresse, certificat TLS, DNS (dont
+# SPF, DMARC, CAA, DNSSEC), RDAP du domaine, robots.txt, security.txt et sitemaps.
+#
+# Usage : bin/entetes URL [--voisins "dom1.fr dom2.org"] [--dossier DOSSIER]
+#   --voisins  domaines proches dont on vérifie seulement la résolution DNS (variantes, typosquattage)
+#
+# Sortie : entetes/*.txt, rdap.json et entetes/resume.json (lu par bin/synthese)
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--voisins"
+lire_arguments "$@"
+exiger dig; exiger openssl
+preparer_sortie entetes
+H="$SITE_DOMAINE"                  # nom d'hôte audité
+D="${H#www.}"                      # domaine sans www
+ACC="https://$H/"
+CURL=(curl -sS --max-time 30 -A "$KIT_UA")
+
+# En-têtes de la page d'accueil (après redirections)
+"${CURL[@]}" -L -D - -o /dev/null "$SITE_URL" > "$SORTIE/entetes_accueil.txt" 2>&1
+
+# Chaînes de redirection des variantes d'adresse et réponses de quelques adresses sensibles
+{
+  for u in "http://$D/" "http://www.$D/" "https://$D/" "https://www.$D/" "http://$H/" \
+           "https://$H/page-inexistante-kit-audit-$RANDOM/" "https://$H/wp-admin/" "https://$H/wp-login.php" \
+           "https://$H/xmlrpc.php" "https://$H/feed/" "https://$H/.git/HEAD" "https://$H/.env"; do
+    echo "== $u"
+    "${CURL[@]}" -o /dev/null -L -w '%{http_code} %{num_redirects} redirection(s) -> %{url_effective}\n' "$u" 2>&1
+    "${CURL[@]}" -I "$u" 2>/dev/null | grep -iE '^(HTTP|location)' | tr -d '\r'
+  done
+} > "$SORTIE/redirections.txt"
+
+# Certificat TLS et protocoles acceptés
+echo | openssl s_client -connect "$H:443" -servername "$H" 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates -ext subjectAltName > "$SORTIE/certificat.txt" 2>&1
+{
+  for p in tls1_2 tls1_3; do
+    if echo | openssl s_client -connect "$H:443" -servername "$H" "-$p" > /dev/null 2>&1; then echo "$p accepte"; else echo "$p refuse"; fi
+  done
+} > "$SORTIE/tls.txt"
+
+# DNS
+{
+  for t in A AAAA CNAME NS MX TXT SOA CAA DS; do echo "== $t $D"; dig +short "$t" "$D"; done
+  echo "== A www.$D"; dig +short A "www.$D"
+  echo "== AAAA www.$D"; dig +short AAAA "www.$D"
+  echo "== TXT _dmarc.$D"; dig +short TXT "_dmarc.$D"
+  echo "== TXT _mta-sts.$D"; dig +short TXT "_mta-sts.$D"
+  for s in default google selector1 selector2 k1 mail; do
+    r="$(dig +short TXT "$s._domainkey.$D")"; [ -n "$r" ] && { echo "== TXT $s._domainkey.$D"; echo "$r"; }
+  done
+} > "$SORTIE/dns.txt"
+
+# RDAP : bureau d'enregistrement, dates, statuts
+"${CURL[@]}" -L "https://rdap.org/domain/$D" > "$SORTIE/rdap.json" 2>/dev/null
+
+# Domaines voisins : résolution seulement
+if [ -n "${OPTS[--voisins]:-}" ]; then
+  for v in ${OPTS[--voisins]}; do
+    echo "== $v : A=$(dig +short A "$v" | tr '\n' ' ') NS=$(dig +short NS "$v" | tr '\n' ' ')"
+  done > "$SORTIE/domaines_voisins.txt"
+fi
+
+# Fichiers publics
+for f in robots.txt .well-known/security.txt sitemap.xml; do
+  "${CURL[@]}" -L -o "$SORTIE/$(echo "$f" | tr '/' '_')" -w "%{http_code} $f\n" "https://$H/$f" 2>/dev/null
+done > "$SORTIE/fichiers_publics.txt"
+"$PYTHON" -m sitemap sources "$SITE_URL" > "$SORTIE/sitemaps.txt" 2>/dev/null
+
+"$PYTHON" -m entetes_resume "$SORTIE" "$SITE_URL"

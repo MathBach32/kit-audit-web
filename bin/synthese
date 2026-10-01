@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Synthèse de l'audit : lit les résultats présents dans le dossier d'audit et produit un document
+# HTML puis PDF (Chrome headless). Les outils non exécutés sont signalés sans bloquer.
+#
+# Usage : bin/synthese URL [--dossier DOSSIER]
+#   (le dossier d'audit par défaut est celui du jour : resultats/<domaine>/<AAAA-MM-JJ>)
+#
+# Sortie : synthese/synthese.html et synthese/synthese.pdf
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+lire_arguments "$@"
+exiger "$CHROME_PATH"
+preparer_sortie synthese
+"$PYTHON" -m synthese "$DOSSIER_AUDIT"

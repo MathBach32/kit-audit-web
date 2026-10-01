@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Mesures Lighthouse locales (Chrome headless du poste), en mobile et en ordinateur, sur des pages types.
+# Complète PageSpeed Insights, ou le remplace quand l'API est indisponible.
+#
+# Usage : bin/lighthouse URL [--pages FICHIER] [--dossier DOSSIER]
+#   --pages  liste d'URL à mesurer (défaut : accueil + 5 pages tirées du sitemap)
+#
+# Sortie : lighthouse/<page>_<mobile|desktop>.json, .html et lighthouse/resume.csv
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--pages"
+lire_arguments "$@"
+exiger lighthouse
+preparer_sortie lighthouse
+erreurs=0
+while read -r url; do
+  nom="$(slug "$url")"
+  for strategie in mobile desktop; do
+    options=(); [ "$strategie" = desktop ] && options=(--preset=desktop)
+    if lighthouse "$url" "${options[@]}" --locale=fr --quiet \
+        --chrome-flags="--headless=new --no-sandbox" \
+        --only-categories=performance,accessibility,best-practices,seo \
+        --output=json --output=html --output-path="$SORTIE/${nom}_${strategie}" < /dev/null 2>> "$SORTIE/journal.txt"; then
+      mv "$SORTIE/${nom}_${strategie}.report.json" "$SORTIE/${nom}_${strategie}.json"
+      mv "$SORTIE/${nom}_${strategie}.report.html" "$SORTIE/${nom}_${strategie}.html"
+      journal "OK  $nom $strategie"
+    else
+      erreurs=$((erreurs + 1)); journal "ERR $nom $strategie"
+    fi
+  done
+done < "$(pages_types 6)"
+"$PYTHON" -m resume_lighthouse "$SORTIE"
+[ "$erreurs" -eq 0 ] || echec "$erreurs mesure(s) en échec (voir journal.txt)"

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Crawl Screaming Frog SEO Spider (version gratuite, mode headless) en trois passes, pour contourner
+# le plafond de 500 URL (ressources et liens externes compris) :
+#   1-crawl    crawl normal depuis l'URL (s'arrête à 500 URL sur les sites moyens)
+#   2-sitemap  mode liste sur les pages déclarées dans le sitemap
+#   3-liste    mode liste sur toutes les pages HTML internes connues (crawl, liens entrants et
+#              sortants, sitemap), découpées en lots si nécessaire, puis CSV fusionnés
+#
+# Usage : bin/sf-crawl URL [--lot 400] [--dossier DOSSIER]
+#   --lot  taille des lots de la passe 3 (défaut 400 ; le plafond s'applique aussi au mode liste)
+#
+# Sortie : sf/1-crawl, sf/2-sitemap, sf/3-liste (exports CSV nommés selon la langue de
+# Screaming Frog) et, à la racine du dossier d'audit, urls_html.txt (réutilisé par les autres outils).
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--lot"
+lire_arguments "$@"
+exiger screamingfrogseospider "Installer Screaming Frog SEO Spider (https://www.screamingfrog.co.uk/seo-spider/)."
+preparer_sortie sf
+LOT="${OPTS[--lot]:-400}"
+[[ "$LOT" =~ ^[0-9]+$ && "$LOT" -ge 1 && "$LOT" -le 500 ]] || echec "--lot doit être compris entre 1 et 500"
+
+ONGLETS="Internal:All,External:All,Response Codes:All,URL:All,Page Titles:All,Meta Description:All,H1:All,H2:All,\
+Content:All,Images:All,Canonicals:All,Directives:All,Links:All,Security:All,Structured Data:All,Sitemaps:All,Validation:All"
+EXPORTS="Links:All Inlinks,Links:All Outlinks,Links:External Links,\
+Response Codes:Internal & External:All Error (4xx 5xx & No Response) Inlinks,\
+Response Codes:Internal & External:Redirection (3xx) Inlinks,Images:Images Missing Alt Text Inlinks,\
+Images:Images Over X kB Inlinks,Content:Exact Duplicates,Content:Near Duplicates,Web:All Cookies,Security:Mixed Content"
+RAPPORTS="Crawl Overview,Issues Overview,Redirects:All Redirects,Redirects:Redirect Chains,Insecure Content,SERP Summary,Orphan Pages"
+
+# sf DOSSIER ARGUMENTS… : lance Screaming Frog et garde son journal dans DOSSIER/journal.txt
+sf() {
+  local dossier="$1"; shift
+  mkdir -p "$dossier"
+  screamingfrogseospider --headless "$@" --output-folder "$dossier" --overwrite --export-format csv \
+    --export-tabs "$ONGLETS" --bulk-export "$EXPORTS" --save-report "$RAPPORTS" \
+    < /dev/null > "$dossier/journal.txt" 2>&1
+}
+
+journal "passe 1 : crawl depuis $SITE_URL"
+sf "$SORTIE/1-crawl" --crawl "$SITE_URL" || journal "passe 1 en échec (voir 1-crawl/journal.txt)"
+n=$("$PYTHON" -m sf_pages plafond "$SORTIE/1-crawl")
+[ "$n" -ge 500 ] && journal "plafond de 500 URL atteint ($n) : les passes 2 et 3 complètent le crawl"
+
+SITEMAP="$(urls_sitemap)"
+if [ -s "$SITEMAP" ]; then
+  journal "passe 2 : $(wc -l < "$SITEMAP") page(s) du sitemap"
+  cp "$SITEMAP" "$SORTIE/urls_sitemap.txt"
+  sf "$SORTIE/2-sitemap" --crawl-list "$SORTIE/urls_sitemap.txt" || journal "passe 2 en échec (voir 2-sitemap/journal.txt)"
+else
+  journal "passe 2 ignorée : aucun sitemap trouvé"
+fi
+
+"$PYTHON" -m sf_pages liste "$SITE_URL" "$SITEMAP" "$SORTIE/1-crawl" "$SORTIE/2-sitemap" > "$DOSSIER_AUDIT/urls_html.txt"
+total=$(wc -l < "$DOSSIER_AUDIT/urls_html.txt")
+[ "$total" -gt 0 ] || echec "aucune page HTML trouvée"
+journal "passe 3 : $total page(s) HTML connues, lots de $LOT"
+mkdir -p "$SORTIE/3-liste/lots"
+split -l "$LOT" -d -a 2 --additional-suffix=.txt "$DOSSIER_AUDIT/urls_html.txt" "$SORTIE/3-liste/lots/lot-"
+lots=()
+for f in "$SORTIE"/3-liste/lots/lot-*.txt; do
+  d="${f%.txt}"
+  journal "  $(basename "$d") : $(wc -l < "$f") page(s)"
+  sf "$d" --crawl-list "$f" || journal "  $(basename "$d") en échec (voir $d/journal.txt)"
+  lots+=("$d")
+done
+"$PYTHON" -m sf_pages fusionner "$SORTIE/3-liste" "${lots[@]}"
+journal "terminé : $SORTIE"

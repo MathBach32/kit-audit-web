@@ -1,0 +1,16 @@
+{
+  "defaults": {
+    "standard": "WCAG2AA",
+    "runners": ["axe"],
+    "timeout": 90000,
+    "wait": 1000,
+    "concurrency": 1,
+    "includeWarnings": false,
+    "includeNotices": false,
+    "chromeLaunchConfig": {
+      "executablePath": "/usr/bin/google-chrome",
+      "args": ["--no-sandbox", "--disable-dev-shm-usage"]
+    },
+    "ignore": []
+  }
+}

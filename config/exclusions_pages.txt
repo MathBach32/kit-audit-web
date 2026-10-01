@@ -1,0 +1,14 @@
+# Adresses à ne pas traiter comme des pages à auditer (expressions régulières, une par ligne).
+# Utilisé par bin/sf-crawl (liste complète des pages) et bin/seo (crawl advertools).
+[?&]share=
+[?&]replytocom=
+[?&]like_comment=
+[?&]amp(=|$)
+/wp-admin/
+/wp-login\.php
+/xmlrpc\.php
+/wp-json/
+/feed/?$
+/comments/feed/
+/trackback/?$
+/embed/?$

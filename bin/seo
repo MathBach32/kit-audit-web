@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Analyse SEO avec advertools (Python) : robots.txt, sitemaps, crawl complet sans plafond (Scrapy,
+# respect de robots.txt, débit modéré) et contrôles des pages : title, meta description, H1,
+# texte, canonique, noindex, images sans texte alternatif, profondeur, doublons, pages orphelines.
+#
+# Usage : bin/seo URL [--max N] [--dossier DOSSIER]
+#   --max  nombre maximal de pages explorées (défaut 2000)
+#
+# Sortie : seo/crawl.jsonl, robots.csv, sitemap.csv, pages.csv, problemes.csv, resume.json
+# et urls_html_advertools.txt à la racine du dossier d'audit.
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--max"
+lire_arguments "$@"
+[ -x "$KIT_RACINE/.venv/bin/python" ] || echec "environnement Python absent : lancer ./installer.sh"
+preparer_sortie seo
+"$PYTHON" -m seo_advertools "$SITE_URL" "$SORTIE" "${OPTS[--max]:-2000}"

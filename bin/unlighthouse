@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Lighthouse sur toutes les pages avec Unlighthouse (mobile, bridage comparable à PageSpeed Insights).
+#
+# Usage : bin/unlighthouse URL [--pages FICHIER] [--max N] [--dossier DOSSIER]
+#   --pages  pages à mesurer (défaut : pages HTML de bin/sf-crawl ou bin/seo, sinon le sitemap ;
+#            sans liste, Unlighthouse explore lui-même le site)
+#   --max    nombre maximal de pages (défaut 500)
+#
+# Sortie : unlighthouse/rapport/ (ci-result.json et rapport consultable, à ouvrir via un petit
+# serveur : python3 -m http.server -d unlighthouse/rapport) et unlighthouse/resume.csv
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--pages --max"
+lire_arguments "$@"
+exiger unlighthouse-ci
+preparer_sortie unlighthouse
+export UNLIGHTHOUSE_MAX_ROUTES="${OPTS[--max]:-500}"
+options=()
+pages="$(pages_a_auditer)"
+if [ "$(wc -l < "$pages")" -gt 1 ]; then
+  # chemins relatifs des pages du même site, séparés par des virgules (désactive l'exploration)
+  chemins="$("$PYTHON" - "$SITE_URL" "$pages" <<'EOF'
+import sys, urllib.parse
+from kit import lire_liste, meme_site
+site, fichier = sys.argv[1], sys.argv[2]
+chemins = []
+for u in lire_liste(fichier):
+    if meme_site(u, site):
+        p = urllib.parse.urlsplit(u)
+        chemins.append(p.path + ("?" + p.query if p.query else ""))
+print(",".join(dict.fromkeys(chemins)))
+EOF
+)"
+  options+=(--urls "$chemins")
+fi
+# Unlighthouse exige un dossier de sortie qui lui soit propre ; il écrit aussi dans le dossier courant
+(cd "$SORTIE" && unlighthouse-ci --site "$SITE_URL" --config-file "$KIT_RACINE/config/unlighthouse.config.mjs" \
+  --output-path "$SORTIE/rapport" --no-cache "${options[@]}" < /dev/null > "$SORTIE/journal.txt" 2>&1)
+code=$?
+[ -s "$SORTIE/rapport/ci-result.json" ] || echec "Unlighthouse a échoué (code $code, voir journal.txt)"
+"$PYTHON" -m unlighthouse_resume "$SORTIE"

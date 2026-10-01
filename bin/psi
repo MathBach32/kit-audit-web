@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Mesures PageSpeed Insights (Lighthouse chez Google + données terrain CrUX quand elles existent),
+# en mobile et en ordinateur, sur des pages types.
+#
+# Usage : bin/psi URL [--pages FICHIER] [--dossier DOSSIER]
+#   --pages  liste d'URL à mesurer (défaut : accueil + 5 pages tirées du sitemap)
+#
+# La clé est lue dans ~/.config/audit-kit/secrets.env (PSI_API_KEY, droits 600), jamais dans le dépôt.
+# Elle est transmise dans l'en-tête X-Goog-Api-Key : elle n'apparaît ni dans l'URL, ni dans la
+# liste des processus, ni dans les journaux.
+# Sortie : psi/<page>_<mobile|desktop>.json et psi/resume.csv
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--pages"
+lire_arguments "$@"
+charger_cle_psi || echec "clé absente : renseigner PSI_API_KEY dans ${KIT_AUDIT_SECRETS:-$HOME/.config/audit-kit/secrets.env} (droits 600)"
+preparer_sortie psi
+API="https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+erreurs=0
+while read -r url; do
+  nom="$(slug "$url")"
+  for strategie in mobile desktop; do
+    fichier="$SORTIE/${nom}_${strategie}.json"
+    code=$(curl -sS -G -o "$fichier" -w '%{http_code}' --max-time 180 \
+      -H @<(printf 'X-Goog-Api-Key: %s\n' "$PSI_API_KEY") \
+      --data-urlencode "url=$url" -d "strategy=$strategie" -d locale=fr \
+      -d category=PERFORMANCE -d category=ACCESSIBILITY -d category=BEST_PRACTICES -d category=SEO "$API")
+    journal "$code $nom $strategie"
+    if [ "$code" = 403 ] && grep -qi "IP_ADDRESS_BLOCKED\|IP address" "$fichier"; then
+      journal "Clé bloquée par la restriction d'adresse IP. Adresses actuelles à autoriser dans Google Cloud :"
+      journal "  IPv4 : $(curl -4 -s --max-time 10 https://api.ipify.org || echo indisponible)"
+      journal "  IPv6 : $(curl -6 -s --max-time 10 https://api6.ipify.org || echo indisponible) (autoriser le préfixe /56)"
+      exit 1
+    fi
+    [ "$code" = 200 ] || { erreurs=$((erreurs + 1)); mv "$fichier" "$SORTIE/${nom}_${strategie}.erreur.txt"; }
+  done
+done < "$(pages_types 6)"
+"$PYTHON" -m resume_lighthouse "$SORTIE"
+[ "$erreurs" -eq 0 ] || echec "$erreurs mesure(s) en échec (voir *.erreur.txt)"

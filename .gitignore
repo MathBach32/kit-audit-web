@@ -1,0 +1,16 @@
+# Résultats d'audit : données des sites audités, jamais versionnées
+/resultats/
+
+# Dépendances installées par installer.sh
+/node_modules/
+/.venv/
+__pycache__/
+
+# SEOnaut : sources clonées pour la construction de l'image, réglages et sauvegardes locales
+/seonaut/.source/
+/seonaut/.env
+/seonaut/sauvegardes/
+
+# Secrets : la clé PSI vit dans ~/.config/audit-kit/secrets.env, jamais ici
+*.env
+!*.env.exemple

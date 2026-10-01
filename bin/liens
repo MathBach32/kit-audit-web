@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Liens cassés (pages, images, scripts, liens externes) avec lychee, sur toutes les pages connues.
+# Les services qui bloquent les robots (Facebook, HelloAsso, wordpress.com/log-in, ?share=…) sont
+# exclus par config/lychee.toml et listés à part, « à vérifier dans un navigateur ».
+#
+# Usage : bin/liens URL [--pages FICHIER] [--max N] [--dossier DOSSIER]
+#   --pages  pages à analyser (défaut : pages HTML de bin/sf-crawl ou bin/seo, sinon le sitemap)
+#   --max    nombre maximal de pages
+#
+# Sortie : liens/lychee.json, liens_casses.csv, a_verifier.csv, resume.json
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--pages --max"
+lire_arguments "$@"
+exiger lychee
+preparer_sortie liens
+pages="$(pages_a_auditer)"
+lychee --config "$KIT_RACINE/config/lychee.toml" --user-agent "$KIT_UA" --files-from "$pages" \
+  --format json --output "$SORTIE/lychee.json" -v < /dev/null 2> "$SORTIE/journal.txt"
+code=$?
+# lychee renvoie 2 quand il trouve des liens cassés : ce n'est pas une panne
+[ "$code" -le 2 ] && [ -s "$SORTIE/lychee.json" ] || echec "lychee a échoué (code $code, voir journal.txt)"
+"$PYTHON" -m liens_resume "$SORTIE" "$SITE_URL"

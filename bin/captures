@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Captures d'écran des pages types, en ordinateur (1366 px) et en mobile (390 px), via Chrome headless.
+#
+# Usage : bin/captures URL [--pages FICHIER] [--dossier DOSSIER]
+#   --pages  liste d'URL à capturer (défaut : accueil + 5 pages tirées du sitemap)
+#
+# Sortie : captures/<page>_ordinateur.png et captures/<page>_mobile.png
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--pages"
+lire_arguments "$@"
+exiger "$CHROME_PATH"
+preparer_sortie captures
+MOBILE_UA="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+while read -r url; do
+  nom="$(slug "$url")"
+  "$CHROME_PATH" --headless=new --no-sandbox --hide-scrollbars --virtual-time-budget=8000 \
+    --window-size=1366,900 --screenshot="$SORTIE/${nom}_ordinateur.png" "$url" < /dev/null 2>/dev/null
+  "$CHROME_PATH" --headless=new --no-sandbox --hide-scrollbars --virtual-time-budget=8000 \
+    --window-size=390,844 --user-agent="$MOBILE_UA" --screenshot="$SORTIE/${nom}_mobile.png" "$url" < /dev/null 2>/dev/null
+  journal "$nom"
+done < "$(pages_types 6)"

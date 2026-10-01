@@ -1,0 +1,103 @@
+/* Feuille de style d'impression (A4) de la synthèse d'audit — reprise d'un rapport d'audit antérieur,
+   palette neutre. Le pied de page (site et date) est ajouté par lib/synthese.py. */
+:root {
+  --encre: #1b1b1a;
+  --encre-2: #52514e;
+  --encre-3: #898781;
+  --filet: #e1e0d9;
+  --fond-doux: #f6f5f1;
+  --accent: #1d5c8c;        /* bleu sobre, lisible en impression */
+  --accent-pale: #e7f0f8;
+  --ok: #0ca30c;
+  --attention: #fab219;
+  --serieux: #ec835a;
+  --critique: #d03b3b;
+}
+
+@page {
+  size: A4;
+  margin: 16mm 15mm 17mm 15mm;
+  @bottom-right { content: counter(page) " / " counter(pages); font: 7.5pt "Noto Sans", sans-serif; color: #898781; }
+}
+@page :first { @bottom-left { content: none; } }
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0;
+  background: #fff;
+  color: var(--encre);
+  font: 9.4pt/1.45 "Noto Sans", system-ui, sans-serif;
+  hyphens: auto;
+}
+h1, h2, h3, h4 { line-height: 1.2; margin: 0; font-weight: 700; }
+h1 { font-size: 20pt; letter-spacing: -0.01em; }
+h2 {
+  font-size: 14pt; margin: 0 0 3mm; padding-bottom: 1.6mm;
+  border-bottom: 1.4pt solid var(--accent); break-after: avoid;
+}
+h2 .num { color: var(--accent); margin-right: 2mm; }
+h3 { font-size: 11pt; margin: 4.5mm 0 1.8mm; break-after: avoid; }
+p { margin: 0 0 2.2mm; }
+ul { margin: 0 0 2.4mm; padding-left: 5mm; }
+li { margin-bottom: 0.8mm; }
+a { color: var(--encre); text-decoration: underline; text-decoration-color: var(--encre-3); word-break: break-all; }
+small, .petit { font-size: 7.8pt; color: var(--encre-2); }
+.muet { color: var(--encre-2); }
+code { font-family: "Noto Sans Mono", ui-monospace, monospace; font-size: 8pt; background: var(--fond-doux); padding: 0 1mm; border-radius: 1mm; }
+
+section { break-before: page; }
+
+/* En-tête de la première page */
+.entete { margin-bottom: 4mm; }
+.entete .surtitre { font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); font-weight: 700; margin-bottom: 1mm; }
+.entete .meta { font-size: 8.5pt; color: var(--encre-2); margin-top: 1.5mm; }
+
+/* Voyants par domaine (statut = libellé + couleur, jamais la couleur seule) */
+.voyants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.2mm; margin: 0 0 3mm; }
+.voyant { border: 0.6pt solid var(--filet); border-radius: 2mm; padding: 2.4mm 2.8mm; border-left-width: 2.2mm; break-inside: avoid; }
+.voyant.vert { border-left-color: var(--ok); }
+.voyant.orange { border-left-color: var(--attention); }
+.voyant.rouge { border-left-color: var(--critique); }
+.voyant.gris { border-left-color: var(--filet); }
+.voyant .dom { font-weight: 700; font-size: 9.2pt; }
+.voyant .etat { font-size: 7.8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 0.6mm 0 1mm; }
+.voyant.vert .etat { color: #006300; }
+.voyant.orange .etat { color: #8a5a00; }
+.voyant.rouge .etat { color: #b02a2a; }
+.voyant.gris .etat { color: var(--encre-3); }
+.voyant p { font-size: 8.2pt; margin: 0; color: var(--encre-2); line-height: 1.35; }
+
+.encadre { background: var(--fond-doux); border-radius: 2mm; padding: 3mm 3.5mm; margin: 0 0 3.5mm; break-inside: avoid; }
+.encadre > :last-child { margin-bottom: 0; }
+
+/* Chiffres clés */
+.chiffres { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.5mm; margin: 0 0 4mm; }
+.chiffre { border: 0.6pt solid var(--filet); border-radius: 2mm; padding: 2.2mm 2.6mm; break-inside: avoid; }
+.chiffre .val { font-size: 15pt; font-weight: 700; line-height: 1.1; }
+.chiffre .lib { font-size: 7.8pt; color: var(--encre-2); line-height: 1.3; margin-top: 0.8mm; }
+
+/* Tableaux */
+table { width: 100%; border-collapse: collapse; margin: 0 0 3.5mm; font-size: 8.2pt; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { text-align: left; font-weight: 700; background: var(--fond-doux); border-bottom: 0.8pt solid #c3c2b7; padding: 1.4mm 1.6mm; vertical-align: bottom; }
+td { border-bottom: 0.5pt solid var(--filet); padding: 1.3mm 1.6mm; vertical-align: top; overflow-wrap: anywhere; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.fiche td:first-child { width: 34%; color: var(--encre-2); }
+table.compact { font-size: 7.6pt; }
+table.compact td, table.compact th { padding: 1mm 1.3mm; }
+
+/* Pastilles (toujours accompagnées du libellé) */
+.grav { display: inline-block; font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.3mm 1.5mm; border-radius: 1mm; white-space: nowrap; border: 0.6pt solid; }
+.grav.critique, .grav.rouge { color: #b02a2a; border-color: var(--critique); background: #fbeaea; }
+.grav.grave, .grav.orange { color: #8a4a1c; border-color: var(--serieux); background: #fdf0ea; }
+.grav.modere, .grav.mineur, .grav.jaune { color: #6b5a00; border-color: var(--attention); background: #fff7e0; }
+.grav.vert { color: #006300; border-color: var(--ok); background: #e8f6e8; }
+
+figure { margin: 0 0 4mm; break-inside: avoid; }
+figcaption { font-size: 7.8pt; color: var(--encre-2); margin-top: 1.2mm; }
+.captures { display: flex; gap: 4mm; justify-content: center; align-items: flex-start; }
+.captures img { height: 95mm; width: auto; border: 0.6pt solid var(--filet); border-radius: 1.5mm; display: block; }
+
+.mention { font-size: 7.6pt; color: var(--encre-2); border-top: 0.5pt solid var(--filet); padding-top: 2mm; margin-top: 4mm; }

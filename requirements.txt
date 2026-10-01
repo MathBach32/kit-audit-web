@@ -1,0 +1,3 @@
+# Dépendances Python du kit, installées dans .venv par installer.sh.
+# Versions transitives figées dans requirements.lock (pip freeze).
+advertools==0.18.0

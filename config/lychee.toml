@@ -1,0 +1,25 @@
+# Configuration de lychee pour bin/liens (https://lychee.cli.rs/).
+# Réglages de courtoisie : peu de requêtes simultanées par hôte, nouvelles tentatives espacées.
+
+max_concurrency = 8
+host_concurrency = 2
+max_retries = 2
+retry_wait_time = 2
+timeout = 20
+max_redirects = 10
+include_mail = false
+no_progress = true
+
+# Faux positifs connus : ces services bloquent les robots (codes 400, 403, 429 ou 999) alors que
+# les liens fonctionnent dans un navigateur. Ils ne sont pas vérifiés automatiquement : la synthèse
+# les liste à part, « à vérifier dans un navigateur ». Ajouter ici les nouveaux cas rencontrés.
+exclude = [
+  '^https?://([a-z0-9-]+\.)*facebook\.com/',
+  '^https?://([a-z0-9-]+\.)*fb\.(me|com)/',
+  '^https?://([a-z0-9-]+\.)*instagram\.com/',
+  '^https?://([a-z0-9-]+\.)*linkedin\.com/',
+  '^https?://([a-z0-9-]+\.)*(twitter|x)\.com/',
+  '^https?://([a-z0-9-]+\.)*helloasso\.com/',
+  '^https?://wordpress\.com/log-in',
+  '[?&]share=',
+]

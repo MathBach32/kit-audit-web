@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Accessibilité page par page avec pa11y-ci et le moteur axe (norme WCAG 2.1 AA), Chrome du système.
+# Un test automatique ne détecte qu'une partie des problèmes (environ un tiers) : il ne remplace
+# pas une vérification manuelle (clavier, lecteur d'écran, sens des textes alternatifs).
+#
+# Usage : bin/accessibilite URL [--pages FICHIER] [--max N] [--dossier DOSSIER]
+#   --pages  pages à tester (défaut : pages HTML de bin/sf-crawl ou bin/seo, sinon le sitemap)
+#   --max    nombre maximal de pages
+#
+# Sortie : accessibilite/pa11y.json, problemes.csv, regles.csv (règles par gravité), resume.json
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+OPTIONS="--pages --max"
+lire_arguments "$@"
+exiger pa11y-ci
+preparer_sortie accessibilite
+pages="$(pages_a_auditer)"
+"$PYTHON" -m a11y_resume config "$pages" "$SORTIE/configuration.json"
+pa11y-ci --config "$SORTIE/configuration.json" --json < /dev/null > "$SORTIE/pa11y.json" 2> "$SORTIE/journal.txt"
+code=$?
+# pa11y-ci renvoie 2 quand il trouve des problèmes : ce n'est pas une panne
+[ "$code" -le 2 ] && [ -s "$SORTIE/pa11y.json" ] || echec "pa11y-ci a échoué (code $code, voir journal.txt)"
+# Seconde tentative pour les pages non testées (délai dépassé, erreur passagère du navigateur)
+"$PYTHON" -m a11y_resume echecs "$SORTIE" > "$SORTIE/pages-relance.txt"
+if [ -s "$SORTIE/pages-relance.txt" ]; then
+  journal "seconde tentative pour $(wc -l < "$SORTIE/pages-relance.txt") page(s) non testée(s)"
+  "$PYTHON" -m a11y_resume config "$SORTIE/pages-relance.txt" "$SORTIE/configuration-relance.json"
+  pa11y-ci --config "$SORTIE/configuration-relance.json" --json < /dev/null > "$SORTIE/pa11y-relance.json" 2>> "$SORTIE/journal.txt"
+  [ -s "$SORTIE/pa11y-relance.json" ] && "$PYTHON" -m a11y_resume fusionner "$SORTIE"
+fi
+"$PYTHON" -m a11y_resume resume "$SORTIE"
