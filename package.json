@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Outils Node du kit d'audit web (versions exactes, installés par installer.sh avec PUPPETEER_SKIP_DOWNLOAD=1 : Chrome du système)",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "dependencies": {
     "@unlighthouse/cli": "0.19.0",
     "lighthouse": "13.5.0",
