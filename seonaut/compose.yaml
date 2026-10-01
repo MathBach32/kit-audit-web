@@ -1,0 +1,63 @@
+# SEOnaut (https://github.com/StJudeWasHere/seonaut, licence MIT) avec MariaDB 11.4.
+# Fichier de base, sans contrainte : il convient au poste ou à un serveur confortable.
+# Sur le Raspberry Pi, les garde-fous s'ajoutent par la ligne
+#   COMPOSE_FILE=compose.yaml:compose.garde-fous.yaml
+# du fichier .env ; pour les lever, il suffit de la remplacer par COMPOSE_FILE=compose.yaml.
+name: seonaut
+
+x-journaux: &journaux
+  driver: json-file
+  options: { max-size: "5m", max-file: "2" }
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${SEONAUT_DB_ROOT_PASSWORD:?à définir dans .env (lancer initialiser.sh)}
+      MARIADB_DATABASE: seonaut
+      MARIADB_USER: seonaut
+      MARIADB_PASSWORD: ${SEONAUT_DB_PASSWORD:?à définir dans .env (lancer initialiser.sh)}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - seonaut_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    logging: *journaux
+
+  app:
+    image: ${SEONAUT_IMAGE:-seonaut-kit:880b312}
+    pull_policy: never            # image construite sur le poste (construire-image.sh), jamais ici
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:${SEONAUT_PORT:-9100}:9000"   # accès local ou par tunnel SSH uniquement
+    environment:
+      SEONAUT_SERVER_HOST: 0.0.0.0
+      SEONAUT_SERVER_PORT: "9000"
+      SEONAUT_SERVER_URL: http://localhost:${SEONAUT_PORT:-9100}
+      SEONAUT_DATABASE_SERVER: db
+      SEONAUT_DATABASE_PORT: "3306"
+      SEONAUT_DATABASE_USER: seonaut
+      SEONAUT_DATABASE_PASSWORD: ${SEONAUT_DB_PASSWORD:?à définir dans .env (lancer initialiser.sh)}
+      SEONAUT_DATABASE_DATABASE: seonaut
+    volumes:
+      - seonaut_archives:/app/archive
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/robots.txt"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    logging: *journaux
+
+volumes:
+  seonaut_db:
+    name: seonaut_db              # nom fixe : sauvegarde, restauration et migration
+  seonaut_archives:
+    name: seonaut_archives

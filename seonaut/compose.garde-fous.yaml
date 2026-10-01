@@ -1,0 +1,33 @@
+# Garde-fous pour le Raspberry Pi 3 (1 Go de RAM partagé avec d'autres services).
+# Activés par COMPOSE_FILE=compose.yaml:compose.garde-fous.yaml dans .env.
+# Pour les lever (machine plus puissante) : COMPOSE_FILE=compose.yaml, rien d'autre à changer.
+#
+# Principes : mémoire plafonnée sans swap (la carte SD est lente et s'use), priorité processeur
+# basse face aux autres conteneurs, et SEOnaut sacrifié en premier si la mémoire vient à manquer.
+services:
+  db:
+    restart: "no"                 # démarrage à la demande (demarrer.sh)
+    mem_limit: 192m
+    memswap_limit: 192m           # égal à mem_limit : pas de swap
+    cpus: 1.5
+    cpu_shares: 256               # 1024 par défaut pour les autres conteneurs
+    oom_score_adj: 800            # tué avant les autres services en cas de manque de mémoire
+    pids_limit: 128
+    volumes:
+      - ./mariadb/garde-fous.cnf:/etc/mysql/conf.d/zz-garde-fous.cnf:ro
+    healthcheck:
+      start_period: 180s          # première initialisation lente sur carte SD
+
+  app:
+    restart: "no"
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 2
+    cpu_shares: 256
+    oom_score_adj: 900            # l'application avant la base
+    pids_limit: 128
+    environment:
+      GOMEMLIMIT: 200MiB          # le ramasse-miettes de Go se resserre avant la limite du conteneur
+      GOMAXPROCS: "2"
+    healthcheck:
+      start_period: 180s          # 149 migrations au premier démarrage

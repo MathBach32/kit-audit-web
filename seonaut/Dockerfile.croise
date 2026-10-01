@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1.18.0
+# Image SEOnaut construite en compilation croisée, sans émulation : les étapes Go et esbuild
+# s'exécutent sur l'architecture du poste ($BUILDPLATFORM) et Go produit directement le binaire
+# de la cible ($TARGETARCH) ; l'étape finale, propre à chaque architecture, ne fait que copier
+# des fichiers (aucun RUN). Adapté du Dockerfile de SEOnaut (licence MIT).
+# Contexte de construction : les sources de SEOnaut (voir construire-image.sh).
+
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine3.22 AS builder
+ARG TARGETOS TARGETARCH
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" -o seonaut cmd/server/main.go
+
+FROM --platform=$BUILDPLATFORM node:22-alpine3.22 AS front
+WORKDIR /home/node
+COPY ./web ./app/web
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --save-exact esbuild@0.28.2 && \
+    ./node_modules/esbuild/bin/esbuild ./app/web/css/style.css \
+      --bundle --minify --outdir=./app/web/static --public-path=/resources \
+      --loader:.woff=file --loader:.woff2=file
+
+FROM alpine:3.22
+LABEL org.opencontainers.image.source="https://github.com/StJudeWasHere/seonaut" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.description="SEOnaut construit par kit-audit-web (compilation croisée)"
+COPY --from=builder /app/seonaut /app/seonaut
+COPY --from=front /home/node/app /app/
+COPY ./translations /app/translations
+COPY ./migrations /app/migrations
+COPY ./config /app/config
+WORKDIR /app
+EXPOSE 9000
+CMD ["/app/seonaut"]
