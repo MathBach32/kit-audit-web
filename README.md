@@ -87,6 +87,10 @@ sous-dossier.
   Unlighthouse et pa11y.
 - La règle axe `frame-tested` est classée « à vérifier » : elle signale une iframe (vidéo,
   publicité) que le test n'a pas pu analyser, pas un défaut.
+- Dépendances : `package.json` force des versions corrigées de `basic-ftp` et `esbuild`
+  (`overrides`). Reste `extract-zip` (alerte élevée, aucun correctif publié) : Puppeteer ne s'en
+  sert que pour télécharger un navigateur, ce que le kit désactive (`PUPPETEER_SKIP_DOWNLOAD`,
+  Chrome du système) ; il n'est donc jamais appelé.
 - Les voyants de la synthèse sont calculés selon des seuils usuels : ils orientent, ils ne
   remplacent pas la lecture des détails.
 
