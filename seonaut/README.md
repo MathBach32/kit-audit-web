@@ -45,8 +45,9 @@ Sur l'hôte, les mêmes scripts se lancent directement : `cd ~/seonaut && ./dema
 est sous `SEUIL_DEMARRAGE_MO` (350 Mo), puis **arrête SEOnaut de lui-même** si elle passe sous
 `SEUIL_ALERTE_MO` (100 Mo) ou si un autre conteneur s'est arrêté ou est devenu « unhealthy ».
 
-Sur le Pi, SEOnaut convient aux **petits sites** (quelques centaines de pages). Pour un gros site,
-lancer la même configuration sur le poste, sans garde-fous :
+Sur le Pi, la mémoire de SEOnaut est restée stable sur un crawl de près de 1 700 adresses (voir les
+mesures ci-dessous) ; au-delà de quelques milliers de pages, ce sont surtout la durée et la base qui
+grossit qui comptent. Pour un gros site, lancer la même configuration sur le poste, sans garde-fous :
 
 ```bash
 cd seonaut && ./initialiser.sh --sans-garde-fous && ./demarrer.sh
@@ -67,8 +68,15 @@ MariaDB 11.4.12 :
 - 17 documents trop imbriqués n'ont pas pu être analysés (« open stack of elements exceeds 512
   nodes ») : c'est une limite de l'analyseur HTML de SEOnaut, sans rapport avec la base.
 
-Sur le Pi, la durée sera plus longue (processeur et carte SD plus lents) ; la mémoire est surveillée
-par `demarrer.sh` et plafonnée par les garde-fous.
+Sur le Raspberry Pi 3 (2 octobre 2026, image arm64 de 23,9 Mo, mêmes garde-fous) :
+
+- premier démarrage (création de la base et migrations) en moins de 2 minutes ; mémoire disponible
+  de l'hôte passée de 498 à 416 Mo ;
+- même crawl (1 682 adresses) en 11 min 47 s, le réseau étant le facteur limitant ; minimum de
+  306 Mo disponibles sur l'hôte, application ≤ 37 Mo, MariaDB ≤ 74 Mo, charge < 1, aucun autre
+  conteneur perturbé ;
+- sauvegarde de 272 Ko, restaurée sans erreur sur le poste (amd64, sans garde-fous) : le chemin de
+  migration fonctionne d'une architecture à l'autre.
 
 ## Sauvegarde et migration
 
