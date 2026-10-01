@@ -65,7 +65,7 @@ except ImportError:
 versions = {
     "Screaming Frog": version("dpkg-query", "-W", "-f=${Version}", "screamingfrogseospider"),
     "Chrome": version("google-chrome", "--version").replace("Google Chrome ", ""),
-    "Lighthouse": version("lighthouse", "--version"), "Unlighthouse": version("unlighthouse-ci", "--version").split("/")[-1],
+    "Lighthouse": version("lighthouse", "--version"), "Unlighthouse": (version("unlighthouse-ci", "--version").split("/")[-1].split() or [""])[0],
     "pa11y-ci": version("pa11y-ci", "--version"), "lychee": version("lychee", "--version").replace("lychee ", ""),
     "advertools": adv,
 }

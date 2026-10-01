@@ -10,6 +10,10 @@ max_redirects = 10
 include_mail = false
 no_progress = true
 
+# 405 : l'adresse existe mais refuse la méthode GET (envoi de formulaire de commentaires
+# wp-comments-post.php, API…) ; ce n'est pas un lien cassé.
+accept = ["100..=103", "200..=299", "405"]
+
 # Faux positifs connus : ces services bloquent les robots (codes 400, 403, 429 ou 999) alors que
 # les liens fonctionnent dans un navigateur. Ils ne sont pas vérifiés automatiquement : la synthèse
 # les liste à part, « à vérifier dans un navigateur ». Ajouter ici les nouveaux cas rencontrés.
@@ -22,4 +26,8 @@ exclude = [
   '^https?://([a-z0-9-]+\.)*helloasso\.com/',
   '^https?://wordpress\.com/log-in',
   '[?&]share=',
+  # Vidéos YouTube : réponses 404 passagères quand on enchaîne les requêtes ; leur disponibilité
+  # est vérifiée de façon fiable par bin/inventaire (oEmbed). Non comptées « à vérifier ».
+  '^https?://(www\.)?youtube(-nocookie)?\.com/(embed|watch|shorts)',
+  '^https?://youtu\.be/',
 ]

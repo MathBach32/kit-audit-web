@@ -82,6 +82,11 @@ sous-dossier.
   langue de l'interface (le kit lit le français et l'anglais).
 - Les tests automatiques d'accessibilité ne trouvent qu'une partie des problèmes.
 - advertools ne distingue pas un `alt` absent d'un `alt=""` décoratif ; axe, si.
+- Ne pas créer ni supprimer de réseaux Docker (`docker compose up/down`) pendant un audit :
+  Chrome interrompt alors ses chargements (`ERR_NETWORK_CHANGED`), ce qui fausse Lighthouse,
+  Unlighthouse et pa11y.
+- La règle axe `frame-tested` est classée « à vérifier » : elle signale une iframe (vidéo,
+  publicité) que le test n'a pas pu analyser, pas un défaut.
 - Les voyants de la synthèse sont calculés selon des seuils usuels : ils orientent, ils ne
   remplacent pas la lecture des détails.
 

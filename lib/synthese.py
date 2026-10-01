@@ -70,7 +70,8 @@ def tableau(entetes, lignes, classe="compact"):
             brut = v[1] if isinstance(v, tuple) else t(v)  # (« html », valeur) pour du HTML déjà construit
             cellules.append(f'<td class="num">{brut}</td>' if h.startswith("#") else f"<td>{brut}</td>")
         corps.append("<tr>" + "".join(cellules) + "</tr>")
-    return f'<table class="{classe}"><thead><tr>{tete}</tr></thead><tbody>{"".join(corps)}</tbody></table>'
+    entete = f"<thead><tr>{tete}</tr></thead>" if any(entetes) else ""
+    return f'<table class="{classe}">{entete}<tbody>{"".join(corps)}</tbody></table>'
 
 
 def pastille(classe, texte):
@@ -207,7 +208,7 @@ class Synthese:
             interne = lire_csv(base / "interne_tous.csv") or lire_csv(base / "internal_all.csv")
             html_ = [l for l in interne if "html" in colonne(l, "Type de contenu", "Content Type").lower()]
             if html_:
-                nb_pages = nb_pages or len(html_)
+                nb_pages = max(nb_pages or 0, len(html_))
                 codes = Counter(colonne(l, "Code HTTP", "Status Code") for l in html_)
                 index = Counter(colonne(l, "Indexabilité", "Indexability") for l in html_)
                 parties.append(f"<h3>Screaming Frog : {len(html_)} pages HTML</h3><p>Codes de réponse : "
@@ -253,7 +254,8 @@ class Synthese:
         rangees = [[("html", f'<a href="{t(l)}">{t(l[:110])}</a>'), code or "–", "interne" if interne == "True" else "externe",
                     len(pages), chemin_court(pages[0])]
                    for (l, code, detail, interne), pages in sorted(par_lien.items(), key=lambda kv: (kv[0][3] != "True", -len(kv[1])))]
-        a_verifier = Counter(urllib.parse.urlsplit(c["lien"]).netloc for c in lire_csv(self.d / "liens/a_verifier.csv"))
+        a_verifier = Counter(r.get("a_verifier_par_famille") or
+                             {urllib.parse.urlsplit(c["lien"]).netloc: 1 for c in lire_csv(self.d / "liens/a_verifier.csv")})
         contenu = (f"<p>{r['liens_verifies']} liens vérifiés ({r['liens_uniques']} adresses différentes) sur {r['pages_analysees']} pages : "
                    f"<strong>{r['liens_casses']} liens cassés</strong>, dont {r['liens_casses_internes']} vers le site lui-même.</p>")
         if rangees:
@@ -262,8 +264,8 @@ class Synthese:
                 contenu += f'<p class="petit">… et {len(rangees) - 40} autres : voir liens/liens_casses.csv.</p>'
         if a_verifier:
             contenu += ("<h3>À vérifier dans un navigateur</h3><p>Ces services bloquent les robots ; leurs liens n'ont pas été "
-                        "vérifiés automatiquement (liste dans config/lychee.toml) :</p>"
-                        + tableau(["Domaine", "#Liens"], [[d, n] for d, n in a_verifier.most_common(20)]))
+                        "vérifiés automatiquement (liste dans config/lychee.toml, détail dans liens/a_verifier.csv) :</p>"
+                        + tableau(["Famille de liens", "#Adresses distinctes"], [[d, n] for d, n in a_verifier.most_common(20)]))
         couleur = "rouge" if r["liens_casses_internes"] else "orange" if r["liens_casses"] > 2 else "vert"
         self.voyant("Liens", couleur, f"{r['liens_casses']} lien(s) cassé(s) dont {r['liens_casses_internes']} interne(s) ; "
                                       f"{r['a_verifier_navigateur']} à vérifier à la main.")
@@ -278,15 +280,20 @@ class Synthese:
             return
         regles = lire_csv(self.d / "accessibilite/regles.csv")
         classes = {"critique": "critique", "grave": "grave", "modéré": "modere", "mineur": "mineur"}
-        contenu = (f"<p>{r['pages_testees']} pages testées avec axe (norme WCAG 2.1 AA) : {r['problemes']} problèmes relevés sur "
-                   f"{r['regles']} règles ; {r['pages_sans_probleme']} pages sans problème détecté"
+        info = r["par_impact"].get("à vérifier", 0)
+        contenu = (f"<p>{r['pages_testees']} pages testées avec axe (norme WCAG 2.1 AA) : {r['problemes'] - info} problèmes relevés"
+                   + (f" et {info} contenus intégrés à vérifier" if info else "")
+                   + f" ; {r['pages_sans_probleme']} pages sans problème détecté"
                    + (f", {r['pages_en_echec']} pages non testées (erreur)" if r["pages_en_echec"] else "") + ".</p>"
                    '<p class="petit">Un test automatique ne détecte qu\'une partie des difficultés : la navigation au clavier, '
                    "la lecture d'écran et la pertinence des textes alternatifs restent à vérifier à la main.</p>"
                    + tableau(["Règle", "Gravité", "#Pages", "#Occurrences", "Description"],
                              [[("html", f'<a href="{t(l["aide"])}">{t(l["regle"])}</a>'), pastille(classes.get(l["impact"], ""), l["impact"]),
                                l["pages"], l["occurrences"], l["description"]] for l in regles]))
-        graves = r["par_impact"].get("critique", 0) + r["par_impact"].get("grave", 0)
+        if r["par_impact"].get("à vérifier"):
+            contenu += ('<p class="petit">« À vérifier » : contenus intégrés (vidéos, publicités, formulaires externes) '
+                        "que le test n'a pas pu analyser ; ce n'est pas un défaut en soi.</p>")
+        graves =r["par_impact"].get("critique", 0) + r["par_impact"].get("grave", 0)
         couleur = "vert" if graves == 0 else "rouge" if r["par_impact"].get("critique", 0) else "orange"
         self.voyant("Accessibilité", couleur, f"{graves} problème(s) critique(s) ou grave(s) selon axe, sur {r['pages_testees']} pages.")
         self.chiffre(str(graves), "problèmes d'accessibilité critiques ou graves")
@@ -350,7 +357,7 @@ class Synthese:
             ["Pages sans données structurées (JSON-LD)", r["sans_donnees_structurees"]],
             ["Liens internes / externes", f"{r['liens_internes']} / {r['liens_externes']}"],
             ["Liens sans texte (image seule ou vide)", r["liens_ancre_vide"]],
-            ["Images (fichiers originaux)", f"{r['images']}, {virgule(r['images_mo'])} Mo au total"],
+            ["Images (fichiers originaux)", f"{r['images']} images, {virgule(r['images_mo'])} Mo au total"],
             ["Vidéos YouTube / indisponibles", f"{r['videos']} / {r['videos_indisponibles']}"],
         ], "fiche"))
         if r["images_lourdes"]:
@@ -391,8 +398,8 @@ class Synthese:
                 contenu += "<p class=\"petit\">Versions : " + t(" ; ".join(f"{k} {v}" for k, v in m["versions"].items())) + ".</p>"
         if self.absents:
             contenu += f"<p>Non exécutés ou sans résultat : {t(', '.join(sorted(set(self.absents))))}.</p>"
-        contenu += (f'<p class="petit">Données brutes : {t(str(self.d))}. Synthèse produite automatiquement par le kit d\'audit '
-                    "web ; les voyants sont des indications calculées selon des seuils usuels, à interpréter.</p>")
+        contenu += (f'<p class="petit">Données brutes : dossier resultats/{t(self.d.parent.name)}/{t(self.d.name)} du kit. '
+                    "Synthèse produite automatiquement par le kit d'audit web ; les voyants sont des indications calculées selon des seuils usuels, à interpréter.</p>")
         self.section("Méthode et outils", contenu)
 
     def html(self):

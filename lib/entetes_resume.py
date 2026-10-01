@@ -83,8 +83,9 @@ def principal(dossier, url):
         "a": z.get(f"A {racine}", []), "aaaa": z.get(f"AAAA {racine}", []), "ns": z.get(f"NS {racine}", []),
         "mx": z.get(f"MX {racine}", []), "caa": z.get(f"CAA {racine}", []),
         "dnssec": bool(z.get(f"DS {racine}")),
-        "spf": next((t.strip('"') for t in z.get(f"TXT {racine}", []) if "v=spf1" in t), ""),
-        "dmarc": " ".join(z.get(f"TXT _dmarc.{racine}", [])).replace('" "', "").strip('"'),
+        # seuls les enregistrements v=spf1 et v=DMARC1 comptent (dig +short affiche aussi les cibles CNAME)
+        "spf": next((t.replace('" "', "").strip('"') for t in z.get(f"TXT {racine}", []) if "v=spf1" in t), ""),
+        "dmarc": next((t.replace('" "', "").strip('"') for t in z.get(f"TXT _dmarc.{racine}", []) if "v=DMARC1" in t), ""),
         "dkim_selecteurs_trouves": [k.split()[1].split(".")[0] for k in z if "._domainkey." in k],
         "verification_google": "google-site-verification" in txt,
     }

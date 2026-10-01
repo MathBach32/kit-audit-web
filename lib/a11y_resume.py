@@ -15,8 +15,12 @@ from pathlib import Path
 from kit import lire_liste
 
 RACINE = Path(__file__).resolve().parents[1]
-IMPACTS = ["critical", "serious", "moderate", "minor", ""]
-IMPACTS_FR = {"critical": "critique", "serious": "grave", "moderate": "modéré", "minor": "mineur", "": "non précisé"}
+IMPACTS = ["critical", "serious", "moderate", "minor", "", "info"]
+IMPACTS_FR = {"critical": "critique", "serious": "grave", "moderate": "modéré", "minor": "mineur", "": "non précisé",
+              "info": "à vérifier"}
+# Règles qui signalent une limite du test plutôt qu'un défaut : frame-tested = contenu d'une iframe
+# (vidéo, publicité, formulaire externe) que axe n'a pas pu analyser ; à vérifier à la main.
+REGLES_INFORMATIVES = {"frame-tested"}
 
 
 def configuration(pages, sortie):
@@ -49,7 +53,8 @@ def resume(dossier):
                 echecs.append({"page": page, "message": i.get("message", str(i))})
                 continue
             extra = i.get("runnerExtras") or {}
-            problemes.append({"page": page, "regle": i["code"], "impact": extra.get("impact") or "",
+            impact = "info" if i["code"] in REGLES_INFORMATIVES else (extra.get("impact") or "")
+            problemes.append({"page": page, "regle": i["code"], "impact": impact,
                               "description": extra.get("help") or extra.get("description") or i.get("message", ""),
                               "selecteur": i.get("selector", ""), "extrait": (i.get("context") or "")[:300],
                               "aide": extra.get("helpUrl", "")})
