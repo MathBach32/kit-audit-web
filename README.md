@@ -90,7 +90,9 @@ sous-dossier.
 - Dépendances : `package.json` force des versions corrigées de `basic-ftp` et `esbuild`
   (`overrides`). Reste `extract-zip` (alerte élevée, aucun correctif publié) : Puppeteer ne s'en
   sert que pour télécharger un navigateur, ce que le kit désactive (`PUPPETEER_SKIP_DOWNLOAD`,
-  Chrome du système) ; il n'est donc jamais appelé.
+  Chrome du système) ; il n'est donc jamais appelé. Même chose pour `node-forge` (alerte élevée,
+  sans correctif) : il ne sert qu'au serveur de développement d'Unlighthouse (`listhen`, certificats
+  de test), alors que le kit n'utilise que le mode CI (`unlighthouse-ci`).
 - Les voyants de la synthèse sont calculés selon des seuils usuels : ils orientent, ils ne
   remplacent pas la lecture des détails.
 
