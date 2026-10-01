@@ -40,6 +40,6 @@ if garde_fous_actifs; then
   fi
 fi
 echo
-echo "SEOnaut tourne sur 127.0.0.1:${SEONAUT_PORT:-9100}. Depuis le poste :"
-echo "  ssh -N -L ${SEONAUT_PORT:-9100}:localhost:${SEONAUT_PORT:-9100} $(hostname)   puis http://localhost:${SEONAUT_PORT:-9100}"
+echo "SEOnaut tourne sur 127.0.0.1:${SEONAUT_PORT:-9100}. Depuis le poste : seonaut/distant.sh tunnel"
+echo "  (ou ssh -N -L ${SEONAUT_PORT:-9100}:localhost:${SEONAUT_PORT:-9100} <alias SSH de cette machine>), puis http://localhost:${SEONAUT_PORT:-9100}"
 echo "Arrêt : ./arreter.sh"

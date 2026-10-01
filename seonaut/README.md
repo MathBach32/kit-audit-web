@@ -52,6 +52,24 @@ lancer la même configuration sur le poste, sans garde-fous :
 cd seonaut && ./initialiser.sh --sans-garde-fous && ./demarrer.sh
 ```
 
+## Mesures et limites constatées
+
+Test sur le poste, le 1er octobre 2026, avec les deux fichiers Compose (garde-fous actifs) et
+MariaDB 11.4.12 :
+
+- les 75 migrations de SEOnaut passent sous MariaDB, et la recherche d'URL (index FULLTEXT) fonctionne ;
+- crawl d'un site WordPress.com (111 pages HTML, 1 669 adresses avec les images) en 13 min 53 s ;
+  base de 7,8 Mo ; mémoire stable, environ 31 Mo pour l'application et 84 Mo pour MariaDB (plafonds
+  de 256 et 192 Mo) ;
+- pour comparaison, MySQL 8.4 réglé de la même façon occupe environ 120 Mo au repos, sans données ;
+- SEOnaut vérifie aussi chaque variante d'image (`?w=768`, `?w=219`… sur WordPress.com), ce qui
+  allonge les crawls ;
+- 17 documents trop imbriqués n'ont pas pu être analysés (« open stack of elements exceeds 512
+  nodes ») : c'est une limite de l'analyseur HTML de SEOnaut, sans rapport avec la base.
+
+Sur le Pi, la durée sera plus longue (processeur et carte SD plus lents) ; la mémoire est surveillée
+par `demarrer.sh` et plafonnée par les garde-fous.
+
 ## Sauvegarde et migration
 
 ```bash
