@@ -100,3 +100,17 @@ sous-dossier.
 
 Le dossier [`seonaut/`](seonaut/README.md) déploie SEOnaut (crawler SEO avec interface web) en
 Docker, avec des garde-fous mémoire pour un petit serveur, faciles à lever.
+
+## Licence
+
+Kit d'audit web — © 2026 [SIM32](https://sim32.fr) — dépôt d'origine :
+<https://github.com/MathBach32/kit-audit-web>.
+
+Distribué sous la **licence Apache 2.0** (texte officiel en anglais dans [`LICENSE`](LICENSE)).
+Vous pouvez l'utiliser, le modifier et le redistribuer, y compris à des fins commerciales, à
+condition de **conserver le fichier [`NOTICE`](NOTICE)** dans toute copie ou œuvre dérivée
+(article 4 d) : il cite SIM32 et l'adresse du dépôt d'origine, et chaque redistributeur doit le
+transmettre à son tour. Les fichiers modifiés doivent l'indiquer (article 4 b).
+
+Le fichier `seonaut/Dockerfile.croise` est adapté de SEOnaut (licence MIT) : voir
+[`LICENCES-TIERCES.md`](LICENCES-TIERCES.md), qui liste aussi les licences des outils appelés.
