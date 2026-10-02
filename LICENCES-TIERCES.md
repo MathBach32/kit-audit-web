@@ -1,7 +1,8 @@
 # Licences tierces
 
-Le kit est sous licence Apache 2.0 (voir `LICENSE` et `NOTICE`). Il contient un fichier dérivé
-d'un logiciel tiers, dont la licence est reproduite ci-dessous.
+Le kit est sous licence EUPL v. 1.2 (voir `NOTICE`, `LICENSE` et `docs/EUPL-1.2-fr.txt`). Il
+contient un fichier dérivé d'un logiciel tiers sous licence MIT, compatible : la licence de ce
+logiciel est reproduite ci-dessous et doit être conservée avec le fichier.
 
 ## SEOnaut — `seonaut/Dockerfile.croise`
 

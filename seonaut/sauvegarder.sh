@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # Sauvegarde logique de la base SEOnaut (mariadb-dump compressé), indépendante de l'architecture
 # et de la version : c'est ce fichier qu'on emporte pour migrer vers une autre machine.
 # SEOnaut doit être démarré (./demarrer.sh).

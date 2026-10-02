@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # Construit l'image SEOnaut sur le poste pour linux/amd64 et linux/arm64, par compilation croisée
 # (Dockerfile.croise : aucune émulation, rien n'est compilé sur le Pi).
 # SEOnaut n'a pas de version publiée : le commit est épinglé ci-dessous et sert d'étiquette.

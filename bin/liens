@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # Liens cassés (pages, images, scripts, liens externes) avec lychee, sur toutes les pages connues.
 # Les services qui bloquent les robots (Facebook, HelloAsso, wordpress.com/log-in, ?share=…) sont
 # exclus par config/lychee.toml et listés à part, « à vérifier dans un navigateur ».

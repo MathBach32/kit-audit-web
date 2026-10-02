@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # Fonctions communes aux commandes de bin/ : arguments, dossier de résultats, listes de pages, secrets.
 # S'utilise par : . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 #
@@ -26,8 +30,9 @@ declare -A OPTS=()
 journal() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >&2; }
 echec() { journal "ERREUR : $*"; exit 1; }
 
-# Affiche le bloc de commentaires d'en-tête du script appelant (mode d'emploi).
-aide() { sed -n '2,/^[^#]/{/^#/s/^# \{0,1\}//p}' "$0"; }
+# Affiche le bloc de commentaires d'en-tête du script appelant (mode d'emploi), sans les
+# mentions de droit d'auteur et de licence.
+aide() { awk 'NR == 1 { next } !/^#/ { exit } /^# (SPDX-|Sous licence EUPL)/ { next } { sub(/^# ?/, ""); if (!vu && $0 == "") next; vu = 1; print }' "$0"; }
 
 # lire_arguments "$@" : remplit URL_ARG et le tableau OPTS.
 # Le script appelant déclare avant l'appel OPTIONS (options suivies d'une valeur)

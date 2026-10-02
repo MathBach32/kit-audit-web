@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # Depuis le poste : copie les fichiers de SEOnaut sur l'hôte cible et y transfère l'image
 # (docker save | ssh docker load), puis télécharge MariaDB sur la cible. Ne démarre rien.
 # Le .env et les sauvegardes de la cible ne sont jamais écrasés.

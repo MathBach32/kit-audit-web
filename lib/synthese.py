@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
 """Synthèse automatique d'un audit : HTML puis PDF (Chrome headless).
 
   python3 -m synthese DOSSIER_AUDIT   → DOSSIER_AUDIT/synthese/synthese.html et synthese.pdf
@@ -109,7 +112,16 @@ class Synthese:
     def __init__(self, dossier):
         self.d = Path(dossier)
         self.site = (self.d / "site.txt").read_text(encoding="utf-8").strip() if (self.d / "site.txt").exists() else ""
-        self.date = self.d.name
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", self.d.name):
+            self.date = self.d.name
+        else:  # dossier imposé par --dossier : date de création de site.txt, au début des relevés
+            repere = self.d / "site.txt"
+            jour = dt.date.fromtimestamp(repere.stat().st_mtime) if repere.exists() else dt.date.today()
+            self.date = jour.isoformat()
+        try:
+            self.chemin = str(self.d.resolve().relative_to(RACINE))
+        except ValueError:
+            self.chemin = self.d.name
         self.voyants, self.chiffres, self.sections, self.absents = [], [], [], []
 
     def present(self, outil):
@@ -398,7 +410,7 @@ class Synthese:
                 contenu += "<p class=\"petit\">Versions : " + t(" ; ".join(f"{k} {v}" for k, v in m["versions"].items())) + ".</p>"
         if self.absents:
             contenu += f"<p>Non exécutés ou sans résultat : {t(', '.join(sorted(set(self.absents))))}.</p>"
-        contenu += (f'<p class="petit">Données brutes : dossier resultats/{t(self.d.parent.name)}/{t(self.d.name)} du kit. '
+        contenu += (f'<p class="petit">Données brutes : dossier {t(self.chemin)}. '
                     "Synthèse produite automatiquement par le kit d'audit web ; les voyants sont des indications calculées selon des seuils usuels, à interpréter.</p>")
         self.section("Méthode et outils", contenu)
 
@@ -411,7 +423,8 @@ class Synthese:
                 print(f"section {etape.__name__} : {e!r}", file=sys.stderr)
         self.annexe()
         domaine = urllib.parse.urlsplit(self.site).netloc
-        style = (RACINE / "gabarit/style.css").read_text(encoding="utf-8")
+        # commentaires retirés : les mentions de licence du gabarit n'ont pas à figurer dans les rapports
+        style = re.sub(r"/\*.*?\*/", "", (RACINE / "gabarit/style.css").read_text(encoding="utf-8"), flags=re.S)
         style += f'\n@page {{ @bottom-left {{ content: "{domaine} — audit du {date_fr(self.date)}"; font: 7.5pt "Noto Sans", sans-serif; color: #898781; }} }}\n'
         voyants = "".join(f'<div class="voyant {c}"><div class="dom">{t(d)}</div><div class="etat">{t(e)}</div><p>{t(x)}</p></div>'
                           for d, c, e, x in self.voyants)
