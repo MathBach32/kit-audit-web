@@ -1,14 +1,21 @@
 Kit d'audit web
-Copyright 2026 SIM32 (https://sim32.fr)
-
 Dépôt d'origine : https://github.com/MathBach32/kit-audit-web
 
-Ce logiciel est distribué sous la licence Apache, version 2.0 (fichier LICENSE).
-Conformément à l'article 4 d de cette licence, toute copie ou œuvre dérivée
-distribuée doit reproduire les mentions ci-dessus : le nom de SIM32 et l'adresse
-du dépôt d'origine.
+Copyright © 2026 SIM32 — EURL SERVICES INFORMATIQUES MIELAN 32 (SIRET 991 597 311 00018) — https://sim32.fr
+Sous licence EUPL
+
+Licence publique de l'Union européenne (EUPL) v. 1.2 : texte officiel en français dans
+docs/EUPL-1.2-fr.txt, en anglais dans LICENSE. Toutes les versions linguistiques approuvées
+par la Commission européenne ont la même valeur (article 13).
+
+Droit d'attribution (article 5) : quiconque distribue ou communique cette œuvre, ou une œuvre
+dérivée, laisse intactes ces déclarations, dont la citation de SIM32 et l'adresse du dépôt
+d'origine, et en joint une copie, avec une copie de la licence, à chaque copie de l'œuvre.
+Toute œuvre dérivée porte un avis bien visible indiquant qu'elle a été modifiée et la date de
+la modification. Les fichiers source portent les mêmes mentions en en-tête.
 
 Original repository: https://github.com/MathBach32/kit-audit-web
-Any redistribution or derivative work must retain this NOTICE (Apache License 2.0, section 4(d)).
+Copyright © 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32). Licensed under the EUPL.
+These notices must be kept intact in every copy and derivative work (EUPL v. 1.2, Article 5).
 
 Ce logiciel inclut un fichier adapté de SEOnaut (licence MIT) : voir LICENCES-TIERCES.md.

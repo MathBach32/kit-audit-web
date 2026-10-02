@@ -103,14 +103,25 @@ Docker, avec des garde-fous mémoire pour un petit serveur, faciles à lever.
 
 ## Licence
 
-Kit d'audit web — © 2026 [SIM32](https://sim32.fr) — dépôt d'origine :
-<https://github.com/MathBach32/kit-audit-web>.
+Kit d'audit web — Copyright © 2026 **SIM32** — EURL SERVICES INFORMATIQUES MIELAN 32
+(SIRET 991 597 311 00018) — <https://sim32.fr>
+Sous licence EUPL — dépôt d'origine : <https://github.com/MathBach32/kit-audit-web>
 
-Distribué sous la **licence Apache 2.0** (texte officiel en anglais dans [`LICENSE`](LICENSE)).
-Vous pouvez l'utiliser, le modifier et le redistribuer, y compris à des fins commerciales, à
-condition de **conserver le fichier [`NOTICE`](NOTICE)** dans toute copie ou œuvre dérivée
-(article 4 d) : il cite SIM32 et l'adresse du dépôt d'origine, et chaque redistributeur doit le
-transmettre à son tour. Les fichiers modifiés doivent l'indiquer (article 4 b).
+Le kit est distribué sous la **Licence publique de l'Union européenne (EUPL) v. 1.2**. Texte
+officiel en français : [`docs/EUPL-1.2-fr.txt`](docs/EUPL-1.2-fr.txt) ; en anglais :
+[`LICENSE`](LICENSE). Toutes les versions linguistiques ont la même valeur (article 13).
+
+Vous pouvez l'utiliser, le modifier et le redistribuer, y compris à des fins commerciales, aux
+conditions de la licence, notamment :
+
+- **conserver intactes les mentions** du fichier [`NOTICE`](NOTICE) et des en-têtes de fichiers
+  (citation de SIM32 et adresse du dépôt d'origine), et les joindre avec la licence à chaque
+  copie (article 5, droit d'attribution) ;
+- indiquer dans toute œuvre dérivée qu'elle a été modifiée, avec la date de la modification
+  (article 5) ;
+- distribuer ou communiquer les œuvres dérivées sous la même licence, en fournissant le code
+  source (article 5, clause copyleft) ; la mise à disposition en ligne des fonctions du logiciel
+  compte comme une communication (article 1).
 
 Le fichier `seonaut/Dockerfile.croise` est adapté de SEOnaut (licence MIT) : voir
 [`LICENCES-TIERCES.md`](LICENCES-TIERCES.md), qui liste aussi les licences des outils appelés.
