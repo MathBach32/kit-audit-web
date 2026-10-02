@@ -112,7 +112,16 @@ class Synthese:
     def __init__(self, dossier):
         self.d = Path(dossier)
         self.site = (self.d / "site.txt").read_text(encoding="utf-8").strip() if (self.d / "site.txt").exists() else ""
-        self.date = self.d.name
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", self.d.name):
+            self.date = self.d.name
+        else:  # dossier imposé par --dossier : date de création de site.txt, au début des relevés
+            repere = self.d / "site.txt"
+            jour = dt.date.fromtimestamp(repere.stat().st_mtime) if repere.exists() else dt.date.today()
+            self.date = jour.isoformat()
+        try:
+            self.chemin = str(self.d.resolve().relative_to(RACINE))
+        except ValueError:
+            self.chemin = self.d.name
         self.voyants, self.chiffres, self.sections, self.absents = [], [], [], []
 
     def present(self, outil):
@@ -401,7 +410,7 @@ class Synthese:
                 contenu += "<p class=\"petit\">Versions : " + t(" ; ".join(f"{k} {v}" for k, v in m["versions"].items())) + ".</p>"
         if self.absents:
             contenu += f"<p>Non exécutés ou sans résultat : {t(', '.join(sorted(set(self.absents))))}.</p>"
-        contenu += (f'<p class="petit">Données brutes : dossier resultats/{t(self.d.parent.name)}/{t(self.d.name)} du kit. '
+        contenu += (f'<p class="petit">Données brutes : dossier {t(self.chemin)}. '
                     "Synthèse produite automatiquement par le kit d'audit web ; les voyants sont des indications calculées selon des seuils usuels, à interpréter.</p>")
         self.section("Méthode et outils", contenu)
 
