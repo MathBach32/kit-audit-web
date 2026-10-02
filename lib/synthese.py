@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
 """Synthèse automatique d'un audit : HTML puis PDF (Chrome headless).
 
   python3 -m synthese DOSSIER_AUDIT   → DOSSIER_AUDIT/synthese/synthese.html et synthese.pdf
@@ -411,7 +414,8 @@ class Synthese:
                 print(f"section {etape.__name__} : {e!r}", file=sys.stderr)
         self.annexe()
         domaine = urllib.parse.urlsplit(self.site).netloc
-        style = (RACINE / "gabarit/style.css").read_text(encoding="utf-8")
+        # commentaires retirés : les mentions de licence du gabarit n'ont pas à figurer dans les rapports
+        style = re.sub(r"/\*.*?\*/", "", (RACINE / "gabarit/style.css").read_text(encoding="utf-8"), flags=re.S)
         style += f'\n@page {{ @bottom-left {{ content: "{domaine} — audit du {date_fr(self.date)}"; font: 7.5pt "Noto Sans", sans-serif; color: #898781; }} }}\n'
         voyants = "".join(f'<div class="voyant {c}"><div class="dom">{t(d)}</div><div class="etat">{t(e)}</div><p>{t(x)}</p></div>'
                           for d, c, e, x in self.voyants)

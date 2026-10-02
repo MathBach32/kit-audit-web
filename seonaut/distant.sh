@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # Depuis le poste : lance un script de SEOnaut sur l'hôte cible, par SSH.
 # Usage : seonaut/distant.sh demarrer|arreter|etat|sauvegarder|initialiser [arguments]
 #         seonaut/distant.sh tunnel        (ouvre le tunnel vers l'interface, Ctrl+C pour fermer)
@@ -6,7 +10,8 @@
 # Variables : SEONAUT_HOTE (défaut : server), SEONAUT_DOSSIER_DISTANT (défaut : seonaut),
 #             SEONAUT_PORT (défaut : 9100).
 set -euo pipefail
-cd "$(dirname "$(readlink -f "$0")")"
+SCRIPT="$(readlink -f "$0")"
+cd "$(dirname "$SCRIPT")"
 HOTE="${SEONAUT_HOTE:-server}"
 DISTANT="${SEONAUT_DOSSIER_DISTANT:-seonaut}"
 PORT="${SEONAUT_PORT:-9100}"
@@ -21,5 +26,5 @@ case "$commande" in
     mkdir -p sauvegardes && chmod 700 sauvegardes
     rsync -av "$HOTE:$DISTANT/sauvegardes/" sauvegardes/ ;;
   *)
-    sed -n '2,/^[^#]/{/^#/s/^# \{0,1\}//p}' "$0"; exit 2 ;;
+    awk 'NR == 1 { next } !/^#/ { exit } /^# (SPDX-|Sous licence EUPL)/ { next } { sub(/^# ?/, ""); if (!vu && $0 == "") next; vu = 1; print }' "$SCRIPT"; exit 2 ;;
 esac

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # Garde-fous pour le Raspberry Pi 3 (1 Go de RAM partagé avec d'autres services).
 # Activés par COMPOSE_FILE=compose.yaml:compose.garde-fous.yaml dans .env.
 # Pour les lever (machine plus puissante) : COMPOSE_FILE=compose.yaml, rien d'autre à changer.

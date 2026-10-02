@@ -1,4 +1,9 @@
 # syntax=docker/dockerfile:1.18.0
+# SPDX-FileCopyrightText: 2022 SEOnaut (Dockerfile d'origine, licence MIT : voir LICENCES-TIERCES.md)
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2 AND MIT
+#
 # Image SEOnaut construite en compilation croisée, sans émulation : les étapes Go et esbuild
 # s'exécutent sur l'architecture du poste ($BUILDPLATFORM) et Go produit directement le binaire
 # de la cible ($TARGETARCH) ; l'étape finale, propre à chaque architecture, ne fait que copier

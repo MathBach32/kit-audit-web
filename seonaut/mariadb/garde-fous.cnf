@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # MariaDB réglé au minimum pour le Raspberry Pi (monté par compose.garde-fous.yaml uniquement).
 # SEOnaut n'utilise que quelques connexions et des tables modestes pour un petit site.
 [mariadb]

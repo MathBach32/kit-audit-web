@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
 # Installe les dépendances du kit sans sudo et vérifie les prérequis du système.
 #   - outils Node (versions exactes de package-lock.json, sans télécharger de Chromium)
 #   - environnement Python .venv (advertools et versions figées de requirements.lock)
