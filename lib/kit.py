@@ -8,6 +8,7 @@ Utilisable aussi en ligne de commande depuis les scripts shell :
   python3 -m kit domaine URL       → nom d'hôte
   python3 -m kit slug URL          → identifiant de fichier lisible (« accueil », « edition-2026 »…)
   python3 -m kit navigateur        → chemin du navigateur (CHROME_PATH, sinon Google Chrome ou Chromium détecté)
+                                     KIT_NAVIGATEUR_LIBRE=1 : CHROME_PATH accepté sans contrôle de version
   python3 -m kit version-navigateur CHEMIN → « Google Chrome 155.0… » ou « Chromium 157.0… »
 """
 import csv
@@ -134,16 +135,25 @@ def version_navigateur(chemin):
     return m.group(0) if m and p.returncode == 0 else ""
 
 
+def navigateur_libre():
+    """Vrai si KIT_NAVIGATEUR_LIBRE=1 : CHROME_PATH peut désigner un autre navigateur de la famille
+    Chromium (Brave, Microsoft Edge…), accepté sans contrôle de sa version."""
+    return os.environ.get("KIT_NAVIGATEUR_LIBRE") == "1"
+
+
 def navigateur():
     """Chemin absolu du navigateur à utiliser ; "" si aucun.
 
-    CHROME_PATH, s'il est défini, est pris tel quel à condition d'être exécutable (pas de repli
-    silencieux sur un autre navigateur) ; sinon, premier de NAVIGATEURS qui répond par une version
-    de Google Chrome ou de Chromium."""
+    CHROME_PATH, s'il est défini, est pris tel quel (pas de repli silencieux sur un autre navigateur),
+    à condition d'être exécutable et de répondre à --version par une version de Google Chrome ou de
+    Chromium, sauf avec KIT_NAVIGATEUR_LIBRE=1 ; sinon, premier de NAVIGATEURS qui répond par une
+    telle version."""
     impose = os.environ.get("CHROME_PATH")
     if impose:
         chemin = shutil.which(impose)
-        return os.path.abspath(chemin) if chemin else ""
+        if not chemin or not (navigateur_libre() or version_navigateur(chemin)):
+            return ""
+        return os.path.abspath(chemin)
     for candidat in NAVIGATEURS:
         chemin = shutil.which(candidat)
         if chemin and version_navigateur(chemin):
@@ -154,9 +164,13 @@ def navigateur():
 def sans_navigateur():
     """Message d'erreur quand navigateur() ne trouve rien."""
     impose = os.environ.get("CHROME_PATH")
-    if impose:
+    if impose and not shutil.which(impose):
         return (f"CHROME_PATH={impose} : navigateur introuvable ou non exécutable (corriger le chemin, "
                 "ou retirer CHROME_PATH pour la détection automatique)")
+    if impose:
+        return (f"CHROME_PATH={impose} : ne répond pas à --version comme Google Chrome ou Chromium (corriger "
+                "le chemin, ou retirer CHROME_PATH pour la détection automatique ; pour un autre navigateur "
+                "de la famille Chromium, comme Brave ou Microsoft Edge, ajouter KIT_NAVIGATEUR_LIBRE=1)")
     return ("aucun navigateur trouvé : installer Google Chrome (https://www.google.com/chrome/) ou Chromium "
             "(paquet de la distribution ou snap), ou indiquer le chemin du navigateur dans CHROME_PATH")
 

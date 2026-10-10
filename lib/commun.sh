@@ -11,6 +11,7 @@
 #   KIT_AUDIT_DOSSIER    dossier d'audit imposé (sinon <résultats>/<domaine>/<AAAA-MM-JJ>)
 #   KIT_AUDIT_SECRETS    fichier des secrets (défaut : ~/.config/audit-kit/secrets.env)
 #   CHROME_PATH          navigateur imposé (défaut : Google Chrome ou Chromium détecté par lib/kit.py)
+#   KIT_NAVIGATEUR_LIBRE 1 : CHROME_PATH accepté sans contrôle de version (Brave, Microsoft Edge…)
 
 set -uo pipefail
 
@@ -22,10 +23,11 @@ export KIT_UA="${KIT_UA:-Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHT
 export PYTHONPATH="$KIT_RACINE/lib${PYTHONPATH:+:$PYTHONPATH}"
 PYTHON="$KIT_RACINE/.venv/bin/python"
 [ -x "$PYTHON" ] || PYTHON=python3
-# Navigateur : CHROME_PATH s'il est défini (chemin absolu), sinon Google Chrome ou Chromium détecté.
-# Vide si aucun : exiger_navigateur l'explique dans les commandes qui en ont besoin.
-CHROME_PATH="$("$PYTHON" -m kit navigateur 2> /dev/null || printf %s "${CHROME_PATH:-}")"
-if [ -n "$CHROME_PATH" ]; then export CHROME_PATH PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-$CHROME_PATH}"; fi
+# Navigateur : CHROME_PATH s'il est défini et accepté (chemin absolu), sinon Google Chrome ou Chromium
+# détecté. KIT_NAVIGATEUR vide si aucun : CHROME_PATH garde alors sa valeur d'origine, que le message
+# d'erreur cite, et exiger_navigateur arrête les commandes qui ont besoin d'un navigateur.
+KIT_NAVIGATEUR="$("$PYTHON" -m kit navigateur 2> /dev/null)"
+if [ -n "$KIT_NAVIGATEUR" ]; then export CHROME_PATH="$KIT_NAVIGATEUR" PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-$KIT_NAVIGATEUR}"; fi
 
 declare -A OPTS=()
 
@@ -137,4 +139,4 @@ charger_cle_psi() {
 # exiger COMMANDE [conseil] : arrête le script si la commande est introuvable.
 exiger() { command -v "$1" > /dev/null || echec "$1 introuvable. ${2:-Lancer ./installer.sh}"; }
 # exiger_navigateur : arrête le script si aucun navigateur (Google Chrome ou Chromium) n'est utilisable.
-exiger_navigateur() { [ -f "${CHROME_PATH:-}" ] && [ -x "$CHROME_PATH" ] || echec "$("$PYTHON" -m kit navigateur 2>&1 > /dev/null)"; }
+exiger_navigateur() { [ -n "$KIT_NAVIGATEUR" ] || echec "$("$PYTHON" -m kit navigateur 2>&1 > /dev/null)"; }

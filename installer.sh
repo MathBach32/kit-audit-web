@@ -36,6 +36,7 @@ python3 -c 'import venv, ensurepip' 2> /dev/null && ok "python3-venv" || manque 
 # Navigateur : même détection que les commandes du kit (lib/kit.py), CHROME_PATH pour en imposer un
 if CHROME="$(python3 lib/kit.py navigateur 2> /dev/null)"; then
   ok "Navigateur : $(python3 lib/kit.py version-navigateur "$CHROME" | grep . || echo "version inconnue") ($CHROME)"
+  [ "${KIT_NAVIGATEUR_LIBRE:-}" = 1 ] && [ -n "${CHROME_PATH:-}" ] && info "KIT_NAVIGATEUR_LIBRE=1 : navigateur imposé accepté sans contrôle de version"
   case "$(readlink -f "$CHROME")" in
     */snap|/snap/*) info "Chromium en snap : pas d'accès aux dossiers cachés de \$HOME ni au /tmp de l'hôte ; garder les résultats sous \$HOME, hors dossier caché (défaut : ${KIT_AUDIT_RESULTATS:-$PWD/resultats})" ;;
   esac

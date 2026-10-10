@@ -22,5 +22,9 @@ while read -r url; do
     --window-size=1366,900 --screenshot="$SORTIE/${nom}_ordinateur.png" "$url" < /dev/null 2>/dev/null
   "$CHROME_PATH" --headless=new --no-sandbox --hide-scrollbars --virtual-time-budget=8000 \
     --window-size=390,844 --user-agent="$MOBILE_UA" --screenshot="$SORTIE/${nom}_mobile.png" "$url" < /dev/null 2>/dev/null
-  journal "$nom"
+  for format in ordinateur mobile; do
+    [ -s "$SORTIE/${nom}_$format.png" ] && journal "OK  $nom $format" || journal "ERR $nom $format : aucune capture"
+  done
 done < "$(pages_types 6)"
+# Un navigateur qui ne produit rien (CHROME_PATH accepté avec KIT_NAVIGATEUR_LIBRE=1, par exemple) est une panne
+compgen -G "$SORTIE/*.png" > /dev/null || echec "aucune capture produite par $CHROME_PATH"

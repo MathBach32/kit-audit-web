@@ -453,8 +453,17 @@ def principal(dossier):
     if not CHROME:
         print(f"{page} produit, PDF impossible : {sans_navigateur()}", file=sys.stderr)
         return 1
-    subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--no-pdf-header-footer", "--allow-file-access-from-files",
-                    f"--print-to-pdf={pdf}", page.as_uri()], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    pdf.unlink(missing_ok=True)
+    try:
+        subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--no-pdf-header-footer", "--allow-file-access-from-files",
+                        f"--print-to-pdf={pdf}", page.as_uri()], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError) as e:
+        detail = f"code {e.returncode}" if isinstance(e, subprocess.CalledProcessError) else e.strerror
+        print(f"{page} produit, PDF impossible : {CHROME} a échoué ({detail})", file=sys.stderr)
+        return 1
+    if not pdf.is_file() or not pdf.stat().st_size:
+        print(f"{page} produit, PDF impossible : {CHROME} n'a rien écrit", file=sys.stderr)
+        return 1
     print(f"→ {page}\n→ {pdf}")
     return 0
 

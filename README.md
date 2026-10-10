@@ -36,8 +36,10 @@ d'installer le snap. `./installer.sh` affiche le navigateur retenu, et `manifest
 « Navigateur ») celui de chaque audit.
 
 Pour en imposer un : `CHROME_PATH=/chemin/du/navigateur bin/tout exemple.fr`. Le chemin imposé est
-utilisé tel quel : s'il n'est pas exécutable, les commandes s'arrêtent au lieu de se rabattre sur un
-autre navigateur.
+utilisé tel quel : s'il n'est pas exécutable, ou s'il ne répond pas à `--version` comme Google Chrome
+ou Chromium, les commandes s'arrêtent au lieu de se rabattre sur un autre navigateur. Pour un autre
+navigateur de la famille Chromium (Brave, Microsoft Edge…), non testé avec le kit, ajouter
+`KIT_NAVIGATEUR_LIBRE=1` : le chemin imposé est alors accepté sans contrôle de version.
 
 Chromium en **snap** (Ubuntu) est confiné : il ne voit ni les dossiers cachés de `$HOME`, ni le
 `/tmp` de l'hôte. Les captures et le PDF de synthèse, écrits par le navigateur lui-même, doivent donc
