@@ -1,16 +1,20 @@
 # SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
 # Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
 # SPDX-License-Identifier: EUPL-1.2
-"""Fonctions Python communes du kit : URL, identifiants de page, accès réseau, lecture de CSV.
+"""Fonctions Python communes du kit : URL, identifiants de page, accès réseau, lecture de CSV, navigateur.
 
 Utilisable aussi en ligne de commande depuis les scripts shell :
   python3 -m kit url ADRESSE       → URL normalisée (https:// ajouté, chemin « / » par défaut)
   python3 -m kit domaine URL       → nom d'hôte
   python3 -m kit slug URL          → identifiant de fichier lisible (« accueil », « edition-2026 »…)
+  python3 -m kit navigateur        → chemin du navigateur (CHROME_PATH, sinon Google Chrome ou Chromium détecté)
+  python3 -m kit version-navigateur CHEMIN → « Google Chrome 155.0… » ou « Chromium 157.0… »
 """
 import csv
 import os
 import re
+import shutil
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -21,6 +25,10 @@ UA = os.environ.get("KIT_UA", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.3
 EXTENSIONS_RESSOURCES = re.compile(
     r"\.(jpe?g|png|gif|webp|avif|svg|ico|bmp|tiff?|pdf|zip|gz|mp[34]|m4a|mov|avi|webm|ogg|wav|"
     r"css|js|json|xml|txt|woff2?|ttf|otf|eot|docx?|xlsx?|pptx?|odt|ods)$", re.I)
+# Navigateurs reconnus, par ordre de préférence : Google Chrome, puis Chromium (paquet, snap ou chemin direct)
+NAVIGATEURS = ("google-chrome-stable", "google-chrome", "chromium", "chromium-browser", "/snap/bin/chromium",
+               "/usr/lib/chromium/chromium", "/opt/google/chrome/chrome")
+VERSION_NAVIGATEUR = re.compile(r"^(Google Chrome|Chromium)\b.*?\d+(\.\d+)+", re.M)
 
 
 def normaliser_url(adresse):
@@ -98,8 +106,52 @@ def lire_liste(chemin):
         return [l.strip() for l in f if l.strip() and not l.startswith("#")]
 
 
+def version_navigateur(chemin):
+    """« Google Chrome 155.0.8059.39 » ou « Chromium 157.0.8097.0 » selon « chemin --version » ;
+    "" si chemin n'est ni Google Chrome ni Chromium (sur Ubuntu, chromium-browser peut n'être qu'un
+    script qui propose d'installer le snap)."""
+    try:
+        r = subprocess.run([chemin, "--version"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    m = VERSION_NAVIGATEUR.search(r.stdout)
+    return m.group(0) if m and r.returncode == 0 else ""
+
+
+def navigateur():
+    """Chemin absolu du navigateur à utiliser ; "" si aucun.
+
+    CHROME_PATH, s'il est défini, est pris tel quel à condition d'être exécutable (pas de repli
+    silencieux sur un autre navigateur) ; sinon, premier de NAVIGATEURS qui répond par une version
+    de Google Chrome ou de Chromium."""
+    impose = os.environ.get("CHROME_PATH")
+    if impose:
+        chemin = shutil.which(impose)
+        return os.path.abspath(chemin) if chemin else ""
+    for candidat in NAVIGATEURS:
+        chemin = shutil.which(candidat)
+        if chemin and version_navigateur(chemin):
+            return os.path.abspath(chemin)
+    return ""
+
+
+def sans_navigateur():
+    """Message d'erreur quand navigateur() ne trouve rien."""
+    impose = os.environ.get("CHROME_PATH")
+    if impose:
+        return (f"CHROME_PATH={impose} : navigateur introuvable ou non exécutable (corriger le chemin, "
+                "ou retirer CHROME_PATH pour la détection automatique)")
+    return ("aucun navigateur trouvé : installer Google Chrome (https://www.google.com/chrome/) ou Chromium "
+            "(paquet de la distribution ou snap), ou indiquer le chemin du navigateur dans CHROME_PATH")
+
+
 def _principal(argv):
-    commandes = {"url": normaliser_url, "domaine": domaine, "slug": slug}
+    if argv[1:] == ["navigateur"]:
+        chemin = navigateur()
+        print(chemin or sans_navigateur(), file=sys.stdout if chemin else sys.stderr)
+        return 0 if chemin else 1
+    commandes = {"url": normaliser_url, "domaine": domaine, "slug": slug, "version-navigateur": version_navigateur}
     if len(argv) != 3 or argv[1] not in commandes:
         print(__doc__, file=sys.stderr)
         return 2
