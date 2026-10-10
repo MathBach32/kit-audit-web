@@ -14,6 +14,7 @@ import csv
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import urllib.error
@@ -29,6 +30,7 @@ EXTENSIONS_RESSOURCES = re.compile(
 NAVIGATEURS = ("google-chrome-stable", "google-chrome", "chromium", "chromium-browser", "/snap/bin/chromium",
                "/usr/lib/chromium/chromium", "/opt/google/chrome/chrome")
 VERSION_NAVIGATEUR = re.compile(r"^(Google Chrome|Chromium)\b.*?\d+(\.\d+)+", re.M)
+DELAI_VERSION = 5  # secondes accordées à « navigateur --version »
 
 
 def normaliser_url(adresse):
@@ -109,14 +111,27 @@ def lire_liste(chemin):
 def version_navigateur(chemin):
     """« Google Chrome 155.0.8059.39 » ou « Chromium 157.0.8097.0 » selon « chemin --version » ;
     "" si chemin n'est ni Google Chrome ni Chromium (sur Ubuntu, chromium-browser peut n'être qu'un
-    script qui propose d'installer le snap)."""
+    script qui propose d'installer le snap).
+
+    Un programme qui ne répond pas en DELAI_VERSION secondes est abandonné : lancé dans sa propre
+    session, il est arrêté avec tout son groupe de processus, sans laisser d'orphelin."""
     try:
-        r = subprocess.run([chemin, "--version"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                           stderr=subprocess.DEVNULL, text=True, timeout=20)
-    except (OSError, subprocess.SubprocessError):
+        p = subprocess.Popen([chemin, "--version"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, text=True, errors="replace", start_new_session=True)
+    except OSError:
         return ""
-    m = VERSION_NAVIGATEUR.search(r.stdout)
-    return m.group(0) if m and r.returncode == 0 else ""
+    try:
+        sortie, _ = p.communicate(timeout=DELAI_VERSION)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        p.stdout.close()  # sans attendre la fin de l'écriture : un descendant sorti du groupe peut la garder ouverte
+        p.wait()
+        return ""
+    m = VERSION_NAVIGATEUR.search(sortie)
+    return m.group(0) if m and p.returncode == 0 else ""
 
 
 def navigateur():
