@@ -40,10 +40,10 @@ d'audit imposé), et selon les commandes `--pages FICHIER` (liste d'URL) et `--m
 | `seo` | advertools 0.18 | crawl complet sans plafond et contrôles : title, description, H1, texte, canonique, doublons, orphelines |
 | `inventaire` | Python | contenus (API WordPress si disponible), métadonnées, liens, poids des images, vidéos YouTube |
 | `liens` | lychee 0.24.2 | liens cassés ; les services anti-robots sont listés à part, « à vérifier dans un navigateur » |
-| `accessibilite` | pa11y-ci 4.1.1 + axe | problèmes WCAG 2.1 AA par page et par règle |
+| `accessibilite` | pa11y-ci 5.0.0 + axe | problèmes WCAG 2.1 AA par page et par règle |
 | `lighthouse` | Lighthouse 13.5.0 | mesures locales, mobile et ordinateur, sur 6 pages types |
 | `psi` | API PageSpeed Insights | mêmes mesures chez Google, plus les données de vrais visiteurs (CrUX) si elles existent |
-| `unlighthouse` | Unlighthouse 0.19.0 | Lighthouse sur toutes les pages, rapport consultable |
+| `unlighthouse` | Unlighthouse 0.19.1 | Lighthouse sur toutes les pages, rapport consultable |
 | `captures` | Chrome headless | captures ordinateur (1366 px) et mobile (390 px) des pages types |
 | `synthese` | Python + Chrome | `synthese/synthese.html` et `synthese.pdf` |
 
@@ -87,12 +87,14 @@ sous-dossier.
   Unlighthouse et pa11y.
 - La règle axe `frame-tested` est classée « à vérifier » : elle signale une iframe (vidéo,
   publicité) que le test n'a pas pu analyser, pas un défaut.
-- Dépendances : `package.json` force des versions corrigées de `basic-ftp` et `esbuild`
-  (`overrides`). Reste `extract-zip` (alerte élevée, aucun correctif publié) : Puppeteer ne s'en
-  sert que pour télécharger un navigateur, ce que le kit désactive (`PUPPETEER_SKIP_DOWNLOAD`,
-  Chrome du système) ; il n'est donc jamais appelé. Même chose pour `node-forge` (alerte élevée,
-  sans correctif) : il ne sert qu'au serveur de développement d'Unlighthouse (`listhen`, certificats
-  de test), alors que le kit n'utilise que le mode CI (`unlighthouse-ci`).
+- Dépendances : `package.json` force des versions corrigées de `basic-ftp` et `esbuild`, et fait
+  utiliser Lighthouse 13 par `@lhci/utils`, qu'Unlighthouse embarque encore avec Lighthouse 12 et
+  Puppeteer 24 (`overrides`) ; cela retire `extract-zip`, abandonné et vulnérable. Pour régénérer
+  `package-lock.json`, retirer d'abord ses entrées `node_modules/@lhci/utils/node_modules/*`,
+  sinon npm n'applique pas ce réglage. Restent deux alertes sans effet sur le kit, vérifiées en
+  supprimant les paquets : `node-forge` ne sert qu'au serveur interactif d'Unlighthouse
+  (`listhen`, certificats de test), alors que le kit n'utilise que le mode CI ; `sprintf-js`
+  n'est chargé que par l'outil en ligne de commande de `js-yaml` 3, jamais appelé.
 - Les voyants de la synthèse sont calculés selon des seuils usuels : ils orientent, ils ne
   remplacent pas la lecture des détails.
 
