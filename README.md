@@ -21,6 +21,34 @@ La clé PageSpeed Insights se range **hors du dépôt**, dans `~/.config/audit-k
 (droits 600) : `PSI_API_KEY=…`. Elle est lue sans exécuter le fichier, et transmise dans un en-tête
 HTTP : elle n'apparaît ni dans les URL, ni dans la liste des processus, ni dans les journaux.
 
+## Interface graphique
+
+```bash
+bin/interface                     # ouvre l'interface dans une fenêtre du navigateur du kit
+bin/interface --sans-navigateur   # affiche seulement l'adresse, à ouvrir soi-même
+```
+
+Une page locale pour lancer un audit (adresse, outils à cocher, nombre maximal de pages, domaines
+voisins), suivre son avancement en direct (état et durée de chaque outil, journal), l'arrêter,
+parcourir les audits passés (voyants de la synthèse, outils réussis ou en échec), ouvrir les
+synthèses HTML et PDF, regénérer un PDF, ouvrir le dossier d'un audit et vérifier l'installation
+(navigateur, versions, clé PSI, `./installer.sh --verifier`). Elle fonctionne hors ligne, en clair
+ou en sombre selon le réglage du poste, et sur un écran de téléphone.
+
+Le serveur (`lib/interface.py`, Python sans dépendance) écoute sur `127.0.0.1`, port 8710 ou le
+suivant libre (`--port N` pour en choisir un autre). La fenêtre s'ouvre avec `$CHROME_PATH --app`
+dans un profil dédié (`~/.cache/kit-audit-web/interface`), sinon avec `xdg-open`. `Ctrl+C` arrête
+l'interface, et l'audit en cours s'il y en a un. La liste des outils vient de
+`bin/tout --liste-outils` ; les voyants, de `synthese/voyants.json`, écrit par la synthèse.
+
+Sécurité : l'adresse affichée contient un jeton propre à la session, échangé à l'ouverture contre
+un cookie `HttpOnly` `SameSite=Strict`. Est refusée toute requête sans ce cookie, avec un en-tête
+`Host` inattendu (contre le *DNS rebinding*) ou, pour une modification, sans l'en-tête `X-Jeton`
+et un corps JSON (contre les requêtes forgées depuis un autre site). Les commandes sont lancées
+sans shell, avec des arguments validés ; seuls les fichiers du dossier des résultats sont servis,
+sans exécuter de script. Un seul audit à la fois. Ne pas partager l'adresse : elle donne accès à
+l'interface jusqu'à son arrêt.
+
 ## Utilisation
 
 ```bash
@@ -95,6 +123,12 @@ sous-dossier.
   de test), alors que le kit n'utilise que le mode CI (`unlighthouse-ci`).
 - Les voyants de la synthèse sont calculés selon des seuils usuels : ils orientent, ils ne
   remplacent pas la lecture des détails.
+- Interface graphique : l'adresse d'ouverture, jeton compris, figure dans la ligne de commande du
+  navigateur, lisible par les autres comptes du poste (`ps`) ; elle est prévue pour un poste
+  personnel. Un audit lancé en ligne de commande n'apparaît pas dans le suivi en direct, seulement
+  dans les audits passés. Les rapports Lighthouse et Unlighthouse, qui ont besoin de JavaScript, ne
+  s'ouvrent pas depuis l'interface (scripts bloqués dans les fichiers servis) : les ouvrir depuis le
+  dossier de l'audit.
 
 ## SEOnaut
 

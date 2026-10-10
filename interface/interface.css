@@ -123,6 +123,7 @@ main:focus { outline: none; }
 .barre { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .barre h2 { margin: 0; }
 .barre-outils { display: flex; gap: 8px; align-items: center; }
+#audits-racine { margin: 0 0 14px; }
 .vide { text-align: center; padding: 40px 24px; color: var(--encre-2); }
 .vide h2 { color: var(--encre); }
 
