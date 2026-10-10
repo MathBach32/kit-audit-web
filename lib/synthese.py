@@ -213,6 +213,11 @@ class Synthese:
             return
         n, catalogue = seo["pages_html"], lire_catalogue()
         self.chiffres.insert(0, (str(n), "pages HTML trouvées"))
+        if "pages_par_gravite" not in seo:  # audit produit par une version antérieure du kit
+            self.voyant("Référencement", "gris", "Audit antérieur au catalogue des constats : voir le tableau.")
+            self.section("Référencement naturel", f"<p>{n} pages HTML explorées.</p>"
+                         + tableau(["Constat", "#Pages"], [[k, v] for k, v in seo.get("problemes", {}).items()]))
+            return
         codes = ", ".join(f"{k} × {v}" for k, v in sorted(seo["codes"].items()))
         parties = [f"<p>{n} pages HTML analysées : {seo['pages_explorees']} atteintes en suivant les liens depuis l'accueil"
                    + (f", {seo['pages_sitemap_seules']} trouvées seulement par le sitemap" if seo.get("pages_sitemap_seules") else "")

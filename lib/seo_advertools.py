@@ -52,6 +52,7 @@ XPATH = {
     "liens_sans_texte": "count(//a[@href][not(normalize-space(string(.)))][not(.//img[normalize-space(@alt)])]"
                         "[not(normalize-space(@aria-label))][not(normalize-space(@title))])",
     "images_sans_alt": "count(//img[not(@alt)])",
+    "sans_protocole": "count(//*[starts-with(normalize-space(@href),'//') or starts-with(normalize-space(@src),'//')])",
     "texte_principal": "normalize-space(string((//main|//article|//*[@role='main'])[1]))",
 }
 
@@ -384,6 +385,8 @@ def principal(url, dossier, max_pages=2000):
             ajouter(u, "liens-nofollow", f"{nofollow[un]} lien(s)")
         if vers_redirection[un]:
             ajouter(u, "liens-redirection", f"{vers_redirection[un]} lien(s)")
+        if nombre(l.get("sans_protocole")):
+            ajouter(u, "liens-sans-protocole", f"{nombre(l.get('sans_protocole'))} adresse(s)")
         if un != accueil and not entrants.get(un):
             ajouter(u, "orpheline", "trouvée par le sitemap" if l["source"] == "sitemap" else "")
         elif isinstance(page["profondeur"], int) and page["profondeur"] > PROFONDEUR_MAX:

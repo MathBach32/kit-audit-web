@@ -58,15 +58,15 @@ modéré, 2 000 adresses au plus par défaut, réglable avec `--max`). Les redir
 enregistrées (`seo/redirections.csv`) puis leurs destinations explorées ; les pages du sitemap
 qu'aucun lien n'atteint sont téléchargées à leur tour : ce sont les pages orphelines.
 
-Chaque constat porte un code du catalogue [`config/problemes.csv`](config/problemes.csv) :
-libellé, catégorie, gravité (haute, moyenne, basse), explication et correction en langage courant.
-La synthèse reprend ce catalogue ; le détail page par page est dans `seo/problemes.csv`. Les
-contrôles couvrent les codes de réponse et les soft 404, l'indexation (noindex en balise ou en
-en-tête, canonique absente, ailleurs ou cassée, meta refresh, sitemap), les title et descriptions
-(absents, en double, longueur en caractères et en pixels), les titres H1 et H2, le texte, les
-contenus identiques ou presque, les images sans `alt`, les liens (sans texte, nofollow, vers des
-redirections), la profondeur, la lenteur du serveur, les en-têtes de sécurité de chaque page et la
-lisibilité des adresses.
+Chaque constat porte un code du catalogue [`config/problemes.csv`](config/problemes.csv) : libellé,
+catégorie, gravité (haute, moyenne, basse), explication et correction en langage courant. La
+synthèse reprend ce catalogue ; le détail page par page est dans `seo/problemes.csv`. Les contrôles
+couvrent les codes de réponse et les soft 404, l'indexation (noindex en balise ou en en-tête,
+canonique absente, ailleurs ou cassée, meta refresh, sitemap), les title et descriptions (absents,
+en double, longueur en caractères et en pixels), les titres H1 et H2, le texte, les contenus
+identiques ou presque, les images sans `alt`, les liens (sans texte, nofollow, vers des
+redirections, sans protocole), la profondeur, la lenteur du serveur, les en-têtes de sécurité de
+chaque page et la lisibilité des adresses.
 
 Le dossier `tests/site-temoin` contient un petit site dont les défauts sont connus, servi par
 `python3 tests/serveur_temoin.py [PORT]` : il permet de vérifier que chaque contrôle fonctionne.
