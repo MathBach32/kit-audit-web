@@ -14,13 +14,34 @@
 #   --max        nombre maximal de pages pour seo, inventaire, liens, accessibilite et unlighthouse
 #   --voisins    domaines proches à tester dans bin/entetes
 #
+# bin/tout --liste-outils : une ligne par commande, dans l'ordre (nom, libellé et description
+# séparés par des tabulations) ; lu par l'interface graphique.
+#
 # Sortie : tous les sous-dossiers des outils, journal.txt, manifeste.json et synthese/synthese.pdf
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 OPTIONS="--sans --seulement --max --voisins"
+ORDRE=(entetes sf-crawl seo inventaire liens accessibilite lighthouse psi unlighthouse captures)
+declare -A LIBELLES=(  # commande → « libellé|description »
+  [entetes]="En-têtes et domaine|En-têtes de sécurité, redirections, certificat TLS, DNS et nom de domaine"
+  [sf-crawl]="Screaming Frog|Crawl en trois passes avec Screaming Frog (version gratuite, 500 URL par passe)"
+  [seo]="Référencement|Crawl complet avec advertools : titres, descriptions, H1, doublons, pages orphelines"
+  [inventaire]="Inventaire|Contenus, métadonnées, liens, poids des images et vidéos YouTube"
+  [liens]="Liens cassés|Liens internes et externes vérifiés avec lychee"
+  [accessibilite]="Accessibilité|Problèmes WCAG 2.1 AA page par page avec pa11y-ci et axe"
+  [lighthouse]="Lighthouse|Performance mesurée sur le poste, mobile et ordinateur, sur six pages types"
+  [psi]="PageSpeed Insights|Mesures chez Google et données de vrais visiteurs (clé API nécessaire)"
+  [unlighthouse]="Unlighthouse|Lighthouse sur toutes les pages du site"
+  [captures]="Captures d'écran|Pages types sur ordinateur (1366 px) et sur téléphone (390 px)"
+)
+if [ "${1:-}" = --liste-outils ]; then
+  for cmd in "${ORDRE[@]}"; do
+    l="${LIBELLES[$cmd]:-$cmd|}"; printf '%s\t%s\t%s\n' "$cmd" "${l%%|*}" "${l#*|}"
+  done
+  exit 0
+fi
 lire_arguments "$@"
 definir_dossier
 export KIT_AUDIT_DOSSIER="$DOSSIER_AUDIT"     # même dossier pour toutes les commandes, même après minuit
-ORDRE=(entetes sf-crawl seo inventaire liens accessibilite lighthouse psi unlighthouse captures)
 SANS=",${OPTS[--sans]:-},"; SEULEMENT="${OPTS[--seulement]:+,${OPTS[--seulement]},}"
 JOURNAL="$DOSSIER_AUDIT/journal.txt"
 ETATS="$DOSSIER_AUDIT/.etats.tsv"; : > "$ETATS"
