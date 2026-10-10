@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /envoyer
+Sitemap: {{base}}/sitemap.xml
