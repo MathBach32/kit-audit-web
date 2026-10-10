@@ -91,7 +91,8 @@ h1 { font-size: 1.2rem; }
   padding: 6px 12px; border-radius: 999px; background: var(--bleu-fond); color: var(--bleu-texte);
   font-size: 0.86rem; font-weight: 650; text-decoration: none;
 }
-.indicateur span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.indicateur .long { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.indicateur .court { display: none; }
 .indicateur .point, .pastille.bleu::before { animation: pulsation 1.4s ease-in-out infinite; }
 .indicateur .point { width: 8px; height: 8px; border-radius: 50%; background: var(--bleu); flex: none; }
 .onglets { display: flex; gap: 2px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
@@ -121,8 +122,7 @@ main:focus { outline: none; }
 .meta { margin: 4px 0 0; font-size: 0.86rem; color: var(--encre-2); }
 .barre { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .barre h2 { margin: 0; }
-.barre-outils { display: flex; gap: 8px; flex-wrap: wrap; }
-.barre-outils input { width: 220px; }
+.barre-outils { display: flex; gap: 8px; align-items: center; }
 .vide { text-align: center; padding: 40px 24px; color: var(--encre-2); }
 .vide h2 { color: var(--encre); }
 
@@ -137,13 +137,14 @@ input[type="text"]:focus-visible, input[type="number"]:focus-visible, input[type
   outline: 3px solid var(--focus); outline-offset: 1px; border-color: var(--accent-plein);
 }
 input[aria-invalid="true"] { border-color: var(--rouge); }
+.barre-outils input[type="search"] { width: 240px; }
 ::placeholder { color: var(--encre-3); opacity: 1; }
 .aide { font-size: 0.85rem; color: var(--encre-2); margin: 6px 0 0; }
 fieldset.outils { border: 0; padding: 0; margin: 24px 0 0; min-width: 0; }
-legend { padding: 0; float: left; margin-right: 16px; }
-.outils-actions { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
-.outils-actions .aide { margin: 0; }
-.grille-outils { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 10px; }
+legend { padding: 0; }
+.outils-actions { display: flex; gap: 6px 16px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
+.outils-actions .aide { margin: 0 0 0 auto; }
+.grille-outils { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 10px; }
 .outil {
   display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; cursor: pointer;
   border: 1px solid var(--filet); border-radius: 11px; background: var(--surface-2);
@@ -253,7 +254,7 @@ button.lien {
 .tableau th { font-weight: 650; color: var(--encre-2); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .tableau td:last-child { font-family: var(--police-mono); font-size: 0.86rem; }
 .sortie {
-  margin: 0; padding: 14px 16px; max-height: 420px; overflow: auto; border-radius: 10px;
+  margin: 0; padding: 14px 16px; max-height: 640px; overflow: auto; border-radius: 10px;
   background: var(--surface-2); border: 1px solid var(--filet);
   font: 12.5px/1.55 var(--police-mono); white-space: pre-wrap; overflow-wrap: anywhere;
 }
@@ -272,15 +273,18 @@ button.lien {
   body { font-size: 15px; }
   .bandeau-interieur { padding: 12px 16px 6px; }
   .sous-titre { font-size: 0.8rem; }
-  .indicateur { max-width: 40%; padding: 5px 10px; }
+  .indicateur { max-width: none; flex: none; padding: 5px 10px; }
+  .indicateur .long { display: none; }
+  .indicateur .court { display: inline; }
+  .bandeau-interieur:has(.indicateur:not([hidden])) .sous-titre { display: none; }
   .onglets { padding: 0 6px; }
   .onglets [role="tab"] { flex: 1 0 auto; padding: 10px 8px 9px; font-size: 0.93rem; }
   main { padding: 16px; }
   .carte { padding: 16px; border-radius: 12px; margin-bottom: 16px; }
   .options { grid-template-columns: 1fr; }
-  .pied .bouton, .barre-outils input { flex: 1 1 auto; }
+  .pied .bouton { flex: 1 1 auto; }
   .barre-outils { width: 100%; }
-  .barre-outils input { width: auto; min-width: 0; }
+  .barre-outils input[type="search"] { flex: 1 1 auto; width: auto; min-width: 0; }
   .journal { max-height: 360px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
