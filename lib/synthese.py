@@ -450,6 +450,11 @@ def principal(dossier):
     sortie.mkdir(exist_ok=True)
     page = sortie / "synthese.html"
     page.write_text(s.html(), encoding="utf-8")
+    # voyants et chiffres clés pour l'interface graphique (écrits avant le PDF, qui peut échouer)
+    (sortie / "voyants.json").write_text(json.dumps({
+        "site": s.site, "date": s.date,
+        "voyants": [{"domaine": d, "couleur": c, "etat": e, "texte": x} for d, c, e, x in s.voyants],
+        "chiffres": [{"valeur": v, "libelle": l} for v, l in s.chiffres[:8]]}, ensure_ascii=False, indent=1), encoding="utf-8")
     pdf = sortie / "synthese.pdf"
     subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--no-pdf-header-footer", "--allow-file-access-from-files",
                     f"--print-to-pdf={pdf}", page.as_uri()], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
