@@ -1,0 +1,142 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+     Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+     SPDX-License-Identifier: EUPL-1.2 -->
+<!-- Page unique de l'interface graphique, servie par lib/interface.py (qui remplace le jeton). -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="kit-jeton" content="__JETON__">
+<title>Kit d'audit web</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d5c8c'/%3E%3Cpath d='M9 17l5 5 9-11' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/interface.css">
+<script src="/interface.js" defer></script>
+</head>
+<body>
+<a class="evitement" href="#contenu">Aller au contenu</a>
+
+<header class="bandeau">
+  <div class="bandeau-interieur">
+    <div class="marque">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M9 17l5 5 9-11"/></svg>
+      <div>
+        <h1>Kit d'audit web</h1>
+        <p class="sous-titre">Audits techniques de sites, synthèses HTML et PDF</p>
+      </div>
+    </div>
+    <a id="indicateur" class="indicateur" href="#suivi" hidden><span class="point" aria-hidden="true"></span><span id="indicateur-texte"></span></a>
+  </div>
+  <nav class="onglets" role="tablist" aria-label="Sections de l'interface">
+    <button type="button" role="tab" id="onglet-nouvel" aria-controls="panneau-nouvel" aria-selected="true">Nouvel audit</button>
+    <button type="button" role="tab" id="onglet-suivi" aria-controls="panneau-suivi" aria-selected="false" tabindex="-1">Suivi</button>
+    <button type="button" role="tab" id="onglet-audits" aria-controls="panneau-audits" aria-selected="false" tabindex="-1">Audits</button>
+    <button type="button" role="tab" id="onglet-installation" aria-controls="panneau-installation" aria-selected="false" tabindex="-1">Installation</button>
+  </nav>
+</header>
+
+<main id="contenu" tabindex="-1">
+
+  <section id="panneau-nouvel" class="panneau" role="tabpanel" aria-labelledby="onglet-nouvel">
+    <form id="formulaire" class="carte" novalidate>
+      <h2>Nouvel audit</h2>
+      <div class="champ">
+        <label for="url">Adresse du site</label>
+        <input id="url" name="url" type="text" inputmode="url" autocomplete="url" spellcheck="false"
+               placeholder="https://exemple.fr/" required aria-describedby="url-aide">
+        <p id="url-aide" class="aide">« https:// » est ajouté si besoin. Les résultats sont rangés par site et par date :
+          relancer un audit le même jour remplace les résultats des outils relancés.</p>
+      </div>
+
+      <fieldset class="outils">
+        <legend>Outils</legend>
+        <div class="outils-actions">
+          <button type="button" class="lien" id="tout-cocher">Tout cocher</button>
+          <button type="button" class="lien" id="tout-decocher">Tout décocher</button>
+          <span id="compte-outils" class="aide" aria-live="polite"></span>
+        </div>
+        <div id="liste-outils" class="grille-outils"><p class="aide">Chargement des outils…</p></div>
+        <p class="aide">La synthèse (HTML et PDF) est toujours produite à la fin.</p>
+      </fieldset>
+
+      <div class="options">
+        <div class="champ">
+          <label for="max">Nombre maximal de pages <span class="facultatif">(facultatif)</span></label>
+          <input id="max" name="max" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="valeur par défaut des outils" aria-describedby="max-aide">
+          <p id="max-aide" class="aide">Pour le référencement, l'inventaire, les liens, l'accessibilité et Unlighthouse.</p>
+        </div>
+        <div class="champ">
+          <label for="voisins">Domaines voisins <span class="facultatif">(facultatif)</span></label>
+          <input id="voisins" name="voisins" type="text" spellcheck="false" autocomplete="off" placeholder="exemple.com exemple.net" aria-describedby="voisins-aide">
+          <p id="voisins-aide" class="aide">Variantes du nom de domaine dont on vérifie la résolution DNS (outil « En-têtes et domaine »), séparées par des espaces.</p>
+        </div>
+      </div>
+
+      <p id="erreur-formulaire" class="message erreur" role="alert" hidden></p>
+      <div class="pied">
+        <button type="submit" class="bouton principal" id="lancer">Lancer l'audit</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="panneau-suivi" class="panneau" role="tabpanel" aria-labelledby="onglet-suivi" hidden>
+    <div id="suivi-vide" class="carte vide">
+      <h2>Aucun audit en cours</h2>
+      <p>Aucun audit n'a été lancé depuis l'ouverture de l'interface.</p>
+      <p><a class="bouton" href="#nouvel">Lancer un audit</a></p>
+    </div>
+    <div id="suivi" hidden>
+      <div class="carte">
+        <div class="titre-carte">
+          <div class="titre-texte">
+            <p id="suivi-genre" class="surtitre"></p>
+            <h2 id="suivi-site"></h2>
+            <p id="suivi-meta" class="meta"></p>
+          </div>
+          <span id="suivi-statut" class="pastille"></span>
+        </div>
+        <ol id="suivi-outils" class="etapes" aria-label="État des outils"></ol>
+        <div class="pied actions">
+          <button type="button" id="arreter" class="bouton danger" hidden>Arrêter l'audit</button>
+          <a id="suivi-synthese" class="bouton" target="_blank" rel="noopener" hidden>Ouvrir la synthèse</a>
+          <a id="suivi-pdf" class="bouton" target="_blank" rel="noopener" hidden>Ouvrir le PDF</a>
+        </div>
+      </div>
+      <div class="carte">
+        <div class="titre-carte">
+          <h2>Journal</h2>
+          <label class="case-simple"><input type="checkbox" id="suivre-fin" checked> Suivre la fin</label>
+        </div>
+        <pre id="journal" class="journal" tabindex="0" aria-label="Journal de l'audit"></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="panneau-audits" class="panneau" role="tabpanel" aria-labelledby="onglet-audits" hidden>
+    <div class="barre">
+      <h2>Audits passés</h2>
+      <div class="barre-outils">
+        <label for="filtre" class="visuellement-cache">Filtrer par site</label>
+        <input id="filtre" type="search" placeholder="Filtrer par site" spellcheck="false">
+        <button type="button" class="bouton" id="actualiser-audits">Actualiser</button>
+      </div>
+    </div>
+    <p id="audits-racine" class="aide"></p>
+    <div id="liste-audits" class="liste-audits" aria-live="polite"></div>
+  </section>
+
+  <section id="panneau-installation" class="panneau" role="tabpanel" aria-labelledby="onglet-installation" hidden>
+    <div class="barre">
+      <h2>Installation</h2>
+      <div class="barre-outils">
+        <button type="button" class="bouton" id="actualiser-installation">Vérifier à nouveau</button>
+      </div>
+    </div>
+    <div id="installation" class="grille-installation" aria-live="polite" aria-busy="false"></div>
+  </section>
+</main>
+
+<div id="annonce" class="annonce" role="status" aria-live="polite"></div>
+</body>
+</html>
