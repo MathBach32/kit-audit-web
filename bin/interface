@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
+# Interface graphique du kit : lancer un audit, suivre son avancement en direct, parcourir les
+# audits passés, ouvrir les synthèses HTML et PDF, regénérer un PDF, voir l'état de l'installation.
+# Petit serveur web local (lib/interface.py) ouvert dans une fenêtre d'application du navigateur
+# du kit ($CHROME_PATH --app, profil dédié dans ~/.cache/kit-audit-web/interface), sinon xdg-open.
+#
+# Usage : bin/interface [--port N] [--sans-navigateur]
+#   --port             premier port essayé sur 127.0.0.1 (défaut 8710 ; s'il est pris, le suivant libre)
+#   --sans-navigateur  n'ouvre aucune fenêtre : l'adresse est seulement affichée
+#
+# L'adresse affichée contient un jeton d'accès valable jusqu'à l'arrêt : ne pas la partager.
+# Ctrl+C arrête l'interface, et l'audit en cours s'il y en a un.
+. "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
+port=8710
+options=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) aide; exit 0 ;;
+    --port) [ $# -ge 2 ] || echec "valeur manquante pour --port"; port="$2"; shift 2 ;;
+    --port=*) port="${1#*=}"; shift ;;
+    --sans-navigateur) options+=(--sans-navigateur); shift ;;
+    *) echec "argument inattendu : $1 (voir --help)" ;;
+  esac
+done
+[[ "$port" =~ ^[0-9]{4,5}$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || echec "port invalide : $port (1024 à 65535)"
+exec "$PYTHON" -m interface --port "$port" "${options[@]}"
