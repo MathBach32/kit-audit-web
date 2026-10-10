@@ -11,7 +11,7 @@
 # en-têtes de sécurité, adresses.
 #
 # Usage : bin/seo URL [--max N] [--dossier DOSSIER]
-#   --max  nombre maximal d'adresses explorées (défaut 2000)
+#   --max  nombre d'adresses explorées, environ (défaut 2000 ; Scrapy termine les requêtes lancées)
 #
 # Sortie : seo/pages.csv, liens.csv, redirections.csv, problemes.csv, resume.json, crawl*.jsonl,
 # robots.csv, sitemap.csv ; et urls_html.txt à la racine du dossier d'audit (pages HTML en 200),

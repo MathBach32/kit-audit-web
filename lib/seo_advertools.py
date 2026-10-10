@@ -44,7 +44,8 @@ PROFONDEUR_MAX = 3
 LENTEUR_S = 1.5
 ADRESSE_MAX = 115
 PROCHE = 0.9                     # similarité (Jaccard sur des groupes de 5 mots) des contenus presque identiques
-SOFT_404 = re.compile(r"\b404\b|introuvable|page non trouv|n[’']existe (plus|pas)|not found", re.I)
+SOFT_404 = re.compile(r"\berreur\s*404\b|^\W*404\b|\bpage\s+(est\s+)?(introuvable|non\s+trouv|inexistante)"
+                      r"|cette page n[’']existe (plus|pas)|\b(page\s+)?not\s+found\b", re.I)
 XPATH = {
     "meta_robots": "//meta[translate(@name,'ROBTS','robts')='robots']/@content",
     "meta_refresh": "//meta[translate(@http-equiv,'REFSH','refsh')='refresh']/@content",
@@ -52,7 +53,10 @@ XPATH = {
     "liens_sans_texte": "count(//a[@href][not(normalize-space(string(.)))][not(.//img[normalize-space(@alt)])]"
                         "[not(normalize-space(@aria-label))][not(normalize-space(@title))])",
     "images_sans_alt": "count(//img[not(@alt)])",
-    "sans_protocole": "count(//*[starts-with(normalize-space(@href),'//') or starts-with(normalize-space(@src),'//')])",
+    # adresses commençant par // ; les indications de connexion (dns-prefetch, preconnect) n'en chargent rien
+    "sans_protocole": "count(//*[starts-with(normalize-space(@href),'//') or starts-with(normalize-space(@src),'//')]"
+                      "[not(self::link[contains(concat(' ',translate(normalize-space(@rel),'DNSPRFTCO','dnsprftco'),' '),' dns-prefetch ')"
+                      " or contains(concat(' ',translate(normalize-space(@rel),'DNSPRFTCO','dnsprftco'),' '),' preconnect ')])])",
     "texte_principal": "normalize-space(string((//main|//article|//*[@role='main'])[1]))",
 }
 
@@ -105,11 +109,25 @@ def domaines_autorises(url):
     return sorted({hote, racine, "www." + racine})
 
 
+def exclusions():
+    """Expression des adresses à ne pas traiter comme des pages (config/exclusions_pages.txt)."""
+    return "|".join(lire_liste(RACINE / "config/exclusions_pages.txt"))
+
+
+def cible_refresh(contenu, page):
+    """Adresse vers laquelle une balise meta refresh redirige, ou "" pour un simple rechargement."""
+    m = re.match(r"\s*[\d.]*\s*[;,]?\s*(?:url\s*=\s*)?(['\"]?)(.*?)\1\s*$", contenu or "", re.I | re.S)
+    brut = m.group(2).strip() if m else ""
+    if not brut:
+        return ""
+    cible = normaliser(urllib.parse.urljoin(page, brut))
+    return "" if cible == normaliser(page) else cible
+
+
 def crawler(urls, sortie, dossier, max_pages, suivre):
     sortie.unlink(missing_ok=True)
-    exclusions = "|".join(lire_liste(RACINE / "config/exclusions_pages.txt"))
     adv.crawl(urls, str(sortie), follow_links=suivre, allowed_domains=domaines_autorises(urls[0]),
-              exclude_url_regex=exclusions or None, xpath_selectors=XPATH, custom_settings={
+              exclude_url_regex=exclusions() or None, xpath_selectors=XPATH, custom_settings={
                   "USER_AGENT": UA, "ROBOTSTXT_OBEY": True, "CLOSESPIDER_PAGECOUNT": max_pages,
                   "AUTOTHROTTLE_ENABLED": True, "AUTOTHROTTLE_TARGET_CONCURRENCY": 2.0,
                   "CONCURRENT_REQUESTS_PER_DOMAIN": 4, "DOWNLOAD_DELAY": 0.25,
@@ -209,11 +227,16 @@ def principal(url, dossier, max_pages=2000):
 
     # Passe 1 : liens depuis l'accueil ; puis destinations des redirections (en suivant leurs
     # liens) ; enfin pages du sitemap qu'aucun lien n'atteint
-    cadres, vus = [], set()
+    cadres, vus, non_explorees = [], set(), {}
+    # advertools n'applique les exclusions qu'aux liens suivis, pas aux adresses de départ d'une passe
+    exclue = re.compile(exclusions() or r"(?!)")
 
     def passe(urls, nom, source, suivre):
         budget = max_pages - sum(len(c) for c in cadres)
-        urls = [u for u in urls if u not in vus][:budget]
+        urls = [u for u in urls if u not in vus and (u == depart or not exclue.search(u))]
+        if urls and budget <= 0:
+            non_explorees[source] = len(urls)
+        urls = urls[:budget]
         if not urls or budget <= 0:
             return False
         c = crawler(urls, d / f"{nom}.jsonl", d, budget, suivre)
@@ -241,6 +264,8 @@ def principal(url, dossier, max_pages=2000):
     passe(urls_sitemap, "crawl_sitemap", "sitemap", False)
     df = pd.concat(cadres, ignore_index=True).drop_duplicates("url_n").reset_index(drop=True)
     resume["plafond_atteint"] = len(df) >= max_pages
+    if non_explorees.get("sitemap"):
+        resume["sitemap_non_explorees"] = non_explorees["sitemap"]
     df["_entete_link"] = colonne(df, "resp_headers_Link")
 
     # Redirections (chaînes résolues) et statut de chaque adresse connue
@@ -306,7 +331,7 @@ def principal(url, dossier, max_pages=2000):
         texte = "" if pd.isna(l.get("body_text")) else str(l.get("body_text"))
         mots = len(re.findall(r"\w+", texte))
         robots = directives(premier(l.get("meta_robots")), entetes["x-robots-tag"][l.name])
-        noindex, refresh = bool(robots & {"noindex", "none"}), premier(l.get("meta_refresh"))
+        noindex, refresh = bool(robots & {"noindex", "none"}), cible_refresh(premier(l.get("meta_refresh")), u)
         canonique = canonique_de(l)
         canonique_n = normaliser(urllib.parse.urljoin(u, canonique)) if canonique else ""
         canonique_ailleurs = bool(canonique_n) and canonique_n != un
@@ -332,12 +357,12 @@ def principal(url, dossier, max_pages=2000):
         if statut != 200:
             continue
         if refresh:  # page de redirection : les autres contrôles n'ont pas de sens
-            ajouter(u, "meta-refresh", refresh)
+            ajouter(u, "meta-refresh", f"vers {refresh} ({premier(l.get('meta_refresh'))})")
             continue
         if SOFT_404.search(titre) or (h1 and SOFT_404.search(h1[0])):
             ajouter(u, "soft-404", titre or h1[0])
         if latence > LENTEUR_S:
-            ajouter(u, "reponse-lente", f"{latence:.1f} s".replace(".", ","))
+            ajouter(u, "reponse-lente", f"{latence:.2f} s".replace(".", ","))
         if noindex:
             ajouter(u, "noindex", ", ".join(sorted(robots)))
         if robots & {"nofollow", "none"}:
@@ -351,22 +376,20 @@ def principal(url, dossier, max_pages=2000):
                 ajouter(u, "canonique-autre", canonique)
         if not titre:
             ajouter(u, "title-absent")
-        else:
-            if len(titre) < TITRE[0]:
-                ajouter(u, "title-court", f"{len(titre)} caractères")
-            elif len(titre) > TITRE[1]:
-                ajouter(u, "title-long", f"{len(titre)} caractères")
-            if page["largeur_title_px"] > TITRE_PX:
-                ajouter(u, "title-pixels", f"{page['largeur_title_px']} px")
+        elif page["largeur_title_px"] > TITRE_PX:  # la largeur décide de la coupure ; la longueur n'est qu'un repère
+            ajouter(u, "title-pixels", f"{page['largeur_title_px']} px, {len(titre)} caractères")
+        elif len(titre) < TITRE[0]:
+            ajouter(u, "title-court", f"{len(titre)} caractères")
+        elif len(titre) > TITRE[1]:
+            ajouter(u, "title-long", f"{len(titre)} caractères")
         if not desc:
             ajouter(u, "description-absente")
-        else:
-            if len(desc) < DESCRIPTION[0]:
-                ajouter(u, "description-courte", f"{len(desc)} caractères")
-            elif len(desc) > DESCRIPTION[1]:
-                ajouter(u, "description-longue", f"{len(desc)} caractères")
-            if page["largeur_description_px"] > DESCRIPTION_PX:
-                ajouter(u, "description-pixels", f"{page['largeur_description_px']} px")
+        elif page["largeur_description_px"] > DESCRIPTION_PX:
+            ajouter(u, "description-pixels", f"{page['largeur_description_px']} px, {len(desc)} caractères")
+        elif len(desc) < DESCRIPTION[0]:
+            ajouter(u, "description-courte", f"{len(desc)} caractères")
+        elif len(desc) > DESCRIPTION[1]:
+            ajouter(u, "description-longue", f"{len(desc)} caractères")
         if not h1:
             ajouter(u, "h1-absent")
         elif len(h1) > 1:
@@ -387,8 +410,9 @@ def principal(url, dossier, max_pages=2000):
             ajouter(u, "liens-redirection", f"{vers_redirection[un]} lien(s)")
         if nombre(l.get("sans_protocole")):
             ajouter(u, "liens-sans-protocole", f"{nombre(l.get('sans_protocole'))} adresse(s)")
-        if un != accueil and not entrants.get(un):
-            ajouter(u, "orpheline", "trouvée par le sitemap" if l["source"] == "sitemap" else "")
+        if un != accueil and not isinstance(page["profondeur"], int):  # aucun chemin de liens depuis l'accueil
+            ajouter(u, "orpheline", (f"liée seulement depuis d'autres pages orphelines ({entrants[un]} lien(s))" if entrants.get(un)
+                                     else "aucun lien interne") + (", trouvée par le sitemap" if l["source"] == "sitemap" else ""))
         elif isinstance(page["profondeur"], int) and page["profondeur"] > PROFONDEUR_MAX:
             ajouter(u, "profonde", f"{page['profondeur']} clics depuis l'accueil")
         if urls_sitemap and indexable and un not in dans_sitemap:

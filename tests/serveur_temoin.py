@@ -3,7 +3,7 @@
 # Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
 # SPDX-License-Identifier: EUPL-1.2
 """Serveur du site témoin (tests/site-temoin) : fichiers statiques, plus les cas qu'un simple
-serveur de fichiers ne sait pas produire (redirections, délai, en-tête X-Robots-Tag, 404).
+serveur de fichiers ne sait pas produire (redirections, délai, en-tête X-Robots-Tag, erreurs 404 et 500).
 
   python3 tests/serveur_temoin.py [PORT]     (défaut 8765 ; 0 = port libre, affiché au démarrage)
 
@@ -15,7 +15,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent / "site-temoin"
-REDIRECTIONS = {"/ancienne-page": "/actualites.html", "/Page_Ancienne.html": "/a-propos/"}
+REDIRECTIONS = {"/ancienne-page": "/actualites.html", "/Page_Ancienne.html": "/a-propos/",
+                "/se-connecter": "/wp-login.php?redirect_to=%2F"}   # destination exclue (config/exclusions_pages.txt)
+ERREURS = {"/erreur-serveur": 500}
 DELAIS = {"/lente.html": 2.0}
 ENTETES = {"/x-robots.html": {"X-Robots-Tag": "noindex"}}
 TYPES = {".html": "text/html; charset=utf-8", ".xml": "application/xml", ".txt": "text/plain; charset=utf-8",
@@ -40,6 +42,9 @@ class Gestionnaire(SimpleHTTPRequestHandler):
             self.send_header("Location", REDIRECTIONS[chemin])
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if chemin in ERREURS:
+            self.envoyer(ERREURS[chemin], "text/html; charset=utf-8", b"<!doctype html><title>Erreur</title><h1>Erreur</h1>", corps)
             return
         fichier = (RACINE / chemin.lstrip("/")).resolve()
         if fichier.is_dir():

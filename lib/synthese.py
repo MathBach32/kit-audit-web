@@ -27,9 +27,14 @@ CHROME = os.environ.get("CHROME_PATH", "/usr/bin/google-chrome")
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 OUTILS = {  # sous-dossier → libellé
     "entetes": "En-têtes, TLS, DNS, domaine", "seo": "advertools (exploration et SEO)",
+    "sf": "Screaming Frog SEO Spider (audit antérieur)",
     "inventaire": "Inventaire des contenus", "liens": "lychee (liens)", "accessibilite": "pa11y-ci + axe (accessibilité)",
     "lighthouse": "Lighthouse local", "psi": "PageSpeed Insights", "unlighthouse": "Unlighthouse", "captures": "Captures d'écran",
 }
+
+
+DOMAINES = {"performance": "Vitesse", "referencement": "Référencement", "liens": "Liens",  # étape → voyant
+            "accessibilite": "Accessibilité", "securite": "Sécurité et domaine"}
 
 
 def t(v):
@@ -212,11 +217,17 @@ class Synthese:
                 self.section("Référencement naturel", f"<p>Exploration impossible : {t(seo['erreur'])}</p>")
             return
         n, catalogue = seo["pages_html"], lire_catalogue()
-        self.chiffres.insert(0, (str(n), "pages HTML trouvées"))
-        if "pages_par_gravite" not in seo:  # audit produit par une version antérieure du kit
-            self.voyant("Référencement", "gris", "Audit antérieur au catalogue des constats : voir le tableau.")
+        if "pages_par_gravite" not in seo:  # audit produit par une version antérieure du kit (calcul d'alors)
+            majeurs = sum(v for k, v in seo.get("problemes", {}).items()
+                          if k.startswith(("erreur", "title absent", "H1 absent", "title en double", "meta description absente")))
+            couleur = "vert" if majeurs == 0 else "orange" if majeurs / max(n, 1) < 0.2 else "rouge"
             self.section("Référencement naturel", f"<p>{n} pages HTML explorées.</p>"
-                         + tableau(["Constat", "#Pages"], [[k, v] for k, v in seo.get("problemes", {}).items()]))
+                         + tableau(["Constat", "#Pages"], [[k, v] for k, v in seo.get("problemes", {}).items()])
+                         + '<p class="petit">Audit produit par une version antérieure du kit : les données Screaming Frog '
+                         "(sf/) ne sont plus reprises ; le PDF d'origine reste la référence.</p>")
+            self.chiffres.insert(0, (str(n), "pages HTML trouvées"))
+            self.voyant("Référencement", couleur, f"{majeurs} constat(s) majeur(s) (erreurs, titres absents ou en double, "
+                                                  f"H1 absents, descriptions absentes) pour {n} pages.")
             return
         codes = ", ".join(f"{k} × {v}" for k, v in sorted(seo["codes"].items()))
         parties = [f"<p>{n} pages HTML analysées : {seo['pages_explorees']} atteintes en suivant les liens depuis l'accueil"
@@ -243,13 +254,18 @@ class Synthese:
         parties.append('<p class="petit">Détail page par page : seo/problemes.csv ; pages : seo/pages.csv ; liens internes : '
                        "seo/liens.csv ; redirections : seo/redirections.csv.</p>")
         if seo.get("plafond_atteint"):
-            parties.append('<p class="petit">Le nombre maximal d\'adresses explorées a été atteint : relancer bin/seo avec --max.</p>')
-        hautes = seo.get("pages_par_gravite", {}).get("haute", 0)
-        part = hautes / max(n, 1)
-        couleur = "vert" if hautes == 0 else "orange" if part < 0.2 else "rouge"
-        self.voyant("Référencement", couleur, f"{hautes} page(s) sur {n} avec au moins un constat de gravité haute "
-                                              "(erreurs, title, description ou H1 absents, title en double, canonique cassée).")
+            parties.append('<p class="petit">Le nombre maximal d\'adresses explorées a été atteint : relancer bin/seo avec --max'
+                           + (f" ; {seo['sitemap_non_explorees']} pages du sitemap n'ont pas été vérifiées."
+                              if seo.get("sitemap_non_explorees") else ".") + "</p>")
+        gravites = seo.get("pages_par_gravite", {})
+        hautes, moyennes = gravites.get("haute", 0), gravites.get("moyenne", 0)
+        couleur = ("rouge" if hautes / max(n, 1) >= 0.2 else "orange" if hautes or moyennes / max(n, 1) >= 0.2 else "vert")
+        libelles = [e["libelle"].lower() for e, nb in constats if e["gravite"] == "haute"]
+        texte = (f"{hautes} page(s) sur {n} avec un constat de gravité haute ({', '.join(libelles)}) ; " if hautes
+                 else "Aucun constat de gravité haute ; ") + f"{moyennes} page(s) avec un constat de gravité moyenne."
         self.section("Référencement naturel", "".join(parties))
+        self.chiffres.insert(0, (str(n), "pages HTML trouvées"))
+        self.voyant("Référencement", couleur, texte)
 
     # --- Liens -----------------------------------------------------------------------------------
     def liens(self):
@@ -417,6 +433,9 @@ class Synthese:
             try:
                 etape()
             except Exception as e:  # noqa: BLE001 — une donnée inattendue ne doit pas bloquer toute la synthèse
+                domaine = DOMAINES.get(etape.__name__)
+                if domaine and not any(v[0] == domaine for v in self.voyants):
+                    self.voyant(domaine, "gris", "Section non produite : données illisibles (voir la section Erreur).")
                 self.section(f"Erreur : {etape.__name__}", f"<p>Section non produite : {t(repr(e))}</p>")
                 print(f"section {etape.__name__} : {e!r}", file=sys.stderr)
         self.annexe()

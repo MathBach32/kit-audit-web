@@ -11,17 +11,26 @@
 #                      [--voisins "dom1.fr dom2.org"] [--dossier DOSSIER]
 #   --sans       commandes à sauter (séparées par des virgules)
 #   --seulement  commandes à lancer (la synthèse est toujours produite)
-#   --max        nombre maximal de pages pour seo, inventaire, liens, accessibilite et unlighthouse
+#   --max        nombre maximal de pages pour seo (environ), inventaire, liens, accessibilite et unlighthouse
 #   --voisins    domaines proches à tester dans bin/entetes
 #
 # Sortie : tous les sous-dossiers des outils, journal.txt, manifeste.json et synthese/synthese.pdf
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 OPTIONS="--sans --seulement --max --voisins"
 lire_arguments "$@"
+ORDRE=(entetes seo inventaire liens accessibilite lighthouse psi unlighthouse captures)
+# noms de --sans et --seulement vérifiés avant de créer le dossier d'audit
+for opt in --sans --seulement; do
+  OPTS[$opt]="${OPTS[$opt]:-}"; OPTS[$opt]="${OPTS[$opt]// /}"
+  IFS=',' read -ra noms <<< "${OPTS[$opt]}"
+  for nom in "${noms[@]}"; do
+    [ "$nom" = sf-crawl ] && { journal "ERREUR : sf-crawl a été retiré : bin/seo le remplace"; exit 2; }
+    [[ " ${ORDRE[*]} " == *" $nom "* ]] || { journal "ERREUR : commande inconnue dans $opt : $nom (connues : ${ORDRE[*]})"; exit 2; }
+  done
+done
 definir_dossier
 export KIT_AUDIT_DOSSIER="$DOSSIER_AUDIT"     # même dossier pour toutes les commandes, même après minuit
-ORDRE=(entetes seo inventaire liens accessibilite lighthouse psi unlighthouse captures)
-SANS=",${OPTS[--sans]:-},"; SEULEMENT="${OPTS[--seulement]:+,${OPTS[--seulement]},}"
+SANS=",${OPTS[--sans]},"; SEULEMENT="${OPTS[--seulement]:+,${OPTS[--seulement]},}"
 JOURNAL="$DOSSIER_AUDIT/journal.txt"
 ETATS="$DOSSIER_AUDIT/.etats.tsv"; : > "$ETATS"
 journal "audit complet de $SITE_URL → $DOSSIER_AUDIT" 2>&1 | tee -a "$JOURNAL" >&2

@@ -15,6 +15,7 @@ set -uo pipefail
 RACINE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 PYTHON="$RACINE/.venv/bin/python"; [ -x "$PYTHON" ] || PYTHON=python3
 GARDER=0; [ "${1:-}" = --garder ] && GARDER=1
+[ "${#TMPDIR}" -le 60 ] || export TMPDIR=/tmp   # même garde que lib/commun.sh (socket de Chrome)
 PORT="$("$PYTHON" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
 TRAVAIL="$(mktemp -d "${TMPDIR:-/tmp}/kit-verif.XXXXXX")"
 python3 "$RACINE/tests/serveur_temoin.py" "$PORT" > "$TRAVAIL/serveur.log" 2>&1 &

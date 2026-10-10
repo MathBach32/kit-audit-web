@@ -14,8 +14,9 @@ Origine : scripts écrits pour un audit réel de site (octobre 2026), puis gén�
 ./installer.sh --verifier   # contrôle seulement
 ```
 
-Prérequis du système : Google Chrome, Node ≥ 22.19, Python 3 avec `venv`, `curl`, `dig`, `openssl`.
-Facultatif : `docker buildx` (pour construire l'image SEOnaut).
+Prérequis du système : Google Chrome ou Chromium (chemin à indiquer dans `CHROME_PATH`), Node ≥
+22.19, Python 3 avec `venv`, `curl`, `dig`, `openssl`. Facultatif : `docker buildx` (pour
+construire l'image SEOnaut).
 
 La clé PageSpeed Insights se range **hors du dépôt**, dans `~/.config/audit-kit/secrets.env`
 (droits 600) : `PSI_API_KEY=…`. Elle est lue sans exécuter le fichier, et transmise dans un en-tête
@@ -54,7 +55,7 @@ pages orphelines à la fin), sinon le sitemap.
 ## Exploration et contrôles SEO
 
 `bin/seo` explore le site depuis l'accueil en suivant les liens (respect de `robots.txt`, débit
-modéré, 2 000 adresses au plus par défaut, réglable avec `--max`). Les redirections sont
+modéré, environ 2 000 adresses par défaut, réglable avec `--max`). Les redirections sont
 enregistrées (`seo/redirections.csv`) puis leurs destinations explorées ; les pages du sitemap
 qu'aucun lien n'atteint sont téléchargées à leur tour : ce sont les pages orphelines.
 
@@ -68,8 +69,10 @@ identiques ou presque, les images sans `alt`, les liens (sans texte, nofollow, v
 redirections, sans protocole), la profondeur, la lenteur du serveur, les en-têtes de sécurité de
 chaque page et la lisibilité des adresses.
 
-Le dossier `tests/site-temoin` contient un petit site dont les défauts sont connus, servi par
-`python3 tests/serveur_temoin.py [PORT]` : il permet de vérifier que chaque contrôle fonctionne.
+Le dossier `tests/site-temoin` contient un petit site dont les défauts sont connus : il déclenche
+chacun des contrôles du catalogue. `tests/verifier.sh` le sert sur un port libre, lance un audit
+complet (sans PageSpeed Insights) et compare les résultats aux défauts attendus
+(`tests/attendus.py`) ; à lancer après chaque mise à jour du kit ou de ses dépendances.
 
 ## Résultats
 

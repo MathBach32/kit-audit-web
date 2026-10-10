@@ -20,22 +20,27 @@ import urllib.parse
 from collections import defaultdict
 from pathlib import Path
 
+from kit import lire_catalogue
+
 OUTILS = ["entetes", "seo", "inventaire", "liens", "accessibilite", "lighthouse", "unlighthouse", "captures"]
 
 # Constats SEO attendus : code → chemins des pages concernées (exactement)
+LONGUE = "/rubrique-tres-longue/une-adresse-beaucoup-trop-longue-pour-etre-lue-partagee-ou-retenue-par-un-visiteur-ordinaire.html"
 SEO = {
     "erreur-4xx": {"/page-absente.html", "/supprimee.html"},
+    "erreur-5xx": {"/erreur-serveur"},
     "soft-404": {"/404-deguisee.html"},
     "meta-refresh": {"/refresh.html"},
     "reponse-lente": {"/lente.html"},
     "noindex": {"/mentions.html", "/x-robots.html"},
+    "nofollow-meta": {LONGUE},
     "canonique-absente": {"/contact.html", "/404-deguisee.html"},
     "canonique-autre": {"/a-propos/", "/actualites.html?page=2"},
     "canonique-cassee": {"/canonique-cassee.html"},
-    "absente-sitemap": {"/cgu.html", "/confidentialite.html", "/Infos_Pratiques.html"},
+    "absente-sitemap": {"/cgu.html", "/confidentialite.html", "/Infos_Pratiques.html", "/rafraichie.html", LONGUE},
     "sitemap-erreur": {"/ancienne-page", "/supprimee.html"},
     "sitemap-non-indexable": {"/a-propos/", "/mentions.html", "/canonique-cassee.html", "/x-robots.html"},
-    "orpheline": {"/orpheline.html"},
+    "orpheline": {"/orpheline.html", "/orpheline2.html"},
     "profonde": {"/profond/4.html"},
     "liens-redirection": {"/"},
     "liens-nofollow": {"/"},
@@ -43,13 +48,15 @@ SEO = {
     "liens-sans-protocole": {"/"},
     "title-absent": {"/actualites.html", "/actualites.html?page=2"},
     "title-court": {"/contact.html", "/404-deguisee.html"},
-    "title-long": {"/a-propos/"},
+    "title-long": {"/profond/2.html"},
     "title-pixels": {"/a-propos/", "/orpheline.html"},
     "title-double": {"/cgu.html", "/confidentialite.html"},
     "description-absente": {"/contact.html", "/404-deguisee.html"},
-    "description-longue": {"/a-propos/"},
+    "description-courte": {LONGUE},
+    "description-longue": {"/profond/2.html"},
     "description-pixels": {"/a-propos/"},
     "description-double": {"/cgu.html", "/confidentialite.html"},
+    "h1-absent": {LONGUE},
     "h1-multiple": {"/a-propos/"},
     "h1-double": {"/cgu.html", "/confidentialite.html"},
     "h2-absent": {"/a-propos/", "/presque.html"},
@@ -59,11 +66,14 @@ SEO = {
     "adresse-soulignement": {"/Infos_Pratiques.html"},
     "adresse-majuscules": {"/Infos_Pratiques.html"},
     "adresse-parametres": {"/actualites.html?page=2"},
+    "adresse-longue": {LONGUE},
 }
-PAGES_200 = 20      # pages HTML en 200, reprises par les autres outils
-SEO_RESUME = {"pages_html": 22, "pages_sitemap_seules": 2, "redirections": 2, "orphelines": 1, "profondeur_max": 4}
+PAGES_200 = 23      # pages HTML en 200, reprises par les autres outils
+SEO_RESUME = {"pages_html": 26, "pages_sitemap_seules": 3, "redirections": 3, "orphelines": 2, "profondeur_max": 4}
+EXCLUES = ("replytocom", "/feed/", "wp-login")   # config/exclusions_pages.txt : jamais explorées ni auditées
 # Règles axe attendues : règle → pages
-AXE = {"image-alt": 1, "label": 1, "color-contrast": 1, "link-name": 1, "document-title": 2, "html-has-lang": 2}
+AXE = {"image-alt": 1, "label": 1, "color-contrast": 1, "link-name": 1, "document-title": 2, "html-has-lang": 2,
+       "meta-refresh": 1}
 
 
 class Verification:
@@ -112,11 +122,15 @@ class Verification:
                         f"seo : {code} sur {sorted(trouves.get(code, set()))} au lieu de {sorted(chemins)}")
         inattendus = set(trouves) - set(SEO) - {"entetes-securite", "peu-de-texte", "contenu-proche"}
         self.exiger(not inattendus, f"seo : constats inattendus {sorted(inattendus)}")
+        jamais = set(lire_catalogue()) - set(trouves)   # le site témoin doit déclencher chaque contrôle du catalogue
+        self.exiger(not jamais, f"seo : contrôles du catalogue jamais déclenchés sur le site témoin : {sorted(jamais)}")
+        for p in self.lire_csv("seo/pages.csv"):
+            self.exiger(not any(x in p["url"] for x in EXCLUES), f"seo : adresse exclue explorée : {p['url']}")
         # toutes les pages en 200 sauf la page de redirection meta refresh, qui n'est pas contrôlée plus avant
         self.exiger(len(trouves.get("entetes-securite", ())) == PAGES_200 - 1, f"seo : en-têtes de sécurité absents sur "
                     f"{len(trouves.get('entetes-securite', ()))} pages au lieu de {PAGES_200 - 1}")
         # pages indexables au texte presque identique (/a-propos/, canonisée vers l'accueil, est exclue)
-        self.exiger({"/profond/1.html", "/profond/2.html", "/profond/3.html"} <= trouves.get("contenu-proche", set()),
+        self.exiger({"/profond/1.html", "/profond/3.html", "/orpheline2.html"} <= trouves.get("contenu-proche", set()),
                     f"seo : rubrique profonde attendue parmi les contenus presque identiques ({sorted(trouves.get('contenu-proche', set()))})")
         liste = (self.d / "urls_html.txt").read_text(encoding="utf-8").split() if (self.d / "urls_html.txt").exists() else []
         accueil = (self.d / "site.txt").read_text(encoding="utf-8").strip() if (self.d / "site.txt").exists() else ""
