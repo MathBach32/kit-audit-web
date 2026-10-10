@@ -5,7 +5,7 @@
 #
 # Installe les dépendances du kit sans sudo et vérifie les prérequis du système.
 #   - outils Node (versions exactes de package-lock.json, sans télécharger de Chromium)
-#   - environnement Python .venv (advertools et versions figées de requirements.lock)
+#   - environnement Python .venv (versions figées et empreintes SHA-256 de requirements.txt)
 #   - lychee dans ~/.local/bin (release GitHub, somme SHA-256 vérifiée)
 #   - fichier des secrets ~/.config/audit-kit/secrets.env (créé vide, droits 600, s'il manque)
 #
@@ -61,7 +61,7 @@ done
 
 if [ "$VERIFIER" = 0 ]; then
   [ -x .venv/bin/python ] || python3 -m venv .venv
-  .venv/bin/pip install -q --upgrade pip && .venv/bin/pip install -q -r requirements.lock && ok "environnement Python installé" || manque "installation Python"
+  .venv/bin/pip install -q --upgrade pip && .venv/bin/pip install -q --require-hashes -r requirements.txt && ok "environnement Python installé" || manque "installation Python"
 fi
 .venv/bin/python -c 'import advertools' 2> /dev/null && ok "advertools $(.venv/bin/python -c 'import advertools; print(advertools.__version__)')" || manque "advertools (lancer ./installer.sh)"
 

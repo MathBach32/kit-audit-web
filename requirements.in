@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
+# Dépendances Python directes du kit. requirements.txt en est tiré par pip-compile (pip-tools) :
+# toutes les versions transitives y sont figées, avec les empreintes SHA-256 des fichiers.
+#   pip-compile --allow-unsafe --generate-hashes --strip-extras requirements.in
+advertools==0.18.0
