@@ -1,0 +1,157 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Mises à jour du kit : le 1er de chaque mois ; petites mises à jour intégrées automatiquement si la vérification passe, versions majeures relues. Même fichier sur GitHub et sur GitLab.",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Paris",
+  "schedule": [
+    "* 0-6 1 * *"
+  ],
+  "minimumReleaseAge": "7 days",
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
+  "internalChecksFilter": "strict",
+  "rangeStrategy": "pin",
+  "labels": [
+    "dépendances"
+  ],
+  "dependencyDashboardTitle": "Tableau de bord des dépendances",
+  "commitMessageAction": "Mise à jour de",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "vers {{#if isPinDigest}}{{{newDigestShort}}}{{else}}{{#if isMajor}}la version {{{newMajor}}}{{else}}{{#if newValue}}{{{newValue}}}{{else}}{{{newDigestShort}}}{{/if}}{{/if}}{{/if}}",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "* 0-6 1 * *"
+    ],
+    "commitMessageAction": "Rafraîchissement",
+    "commitMessageTopic": "des fichiers de verrouillage",
+    "commitMessageExtra": ""
+  },
+  "pip_requirements": {
+    "enabled": false
+  },
+  "pip-compile": {
+    "managerFilePatterns": [
+      "/(^|/)requirements\\.txt$/"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Petites mises à jour : intégrées automatiquement dès que la vérification passe",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest",
+        "pinDigest",
+        "lockFileMaintenance"
+      ],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Versions majeures : relues avant intégration",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "version majeure"
+      ]
+    },
+    {
+      "description": "MariaDB, base de SEOnaut : migration des données à préparer, jamais automatique",
+      "matchPackageNames": [
+        "mariadb"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Versions de Python et de Node de la vérification : changement à relire (le verrou Python vise 3.12)",
+      "matchManagers": [
+        "pyenv",
+        "nvm"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Image SEOnaut construite localement, absente des registres",
+      "matchPackageNames": [
+        "seonaut-kit"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "SEOnaut : l'image doit être reconstruite puis déployée à la main",
+      "matchDepNames": [
+        "seonaut"
+      ],
+      "automerge": false,
+      "minimumReleaseAge": null,
+      "postUpgradeTasks": {
+        "commands": [
+          "outils/maj-seonaut.sh"
+        ],
+        "fileFilters": [
+          "seonaut/compose.yaml",
+          "seonaut/.env.exemple"
+        ],
+        "executionMode": "update"
+      },
+      "prBodyNotes": [
+        "Après fusion : `seonaut/construire-image.sh`, puis `seonaut/deployer.sh` vers le serveur."
+      ]
+    },
+    {
+      "description": "lychee : empreintes SHA-256 reprises des fichiers .sha256 publiés avec la version",
+      "matchDepNames": [
+        "lycheeverse/lychee"
+      ],
+      "postUpgradeTasks": {
+        "commands": [
+          "outils/maj-lychee.sh"
+        ],
+        "fileFilters": [
+          "installer.sh"
+        ],
+        "executionMode": "update"
+      }
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "lychee, binaire installé par installer.sh",
+      "managerFilePatterns": [
+        "/^installer\\.sh$/"
+      ],
+      "matchStrings": [
+        "LYCHEE_VERSION=(?<currentValue>[0-9][0-9.]*)"
+      ],
+      "depNameTemplate": "lycheeverse/lychee",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^lychee-v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "SEOnaut, sans version publiée : commit épinglé",
+      "managerFilePatterns": [
+        "/^seonaut/construire-image\\.sh$/"
+      ],
+      "matchStrings": [
+        "COMMIT=(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "depNameTemplate": "seonaut",
+      "packageNameTemplate": "https://github.com/StJudeWasHere/seonaut",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    }
+  ]
+}
