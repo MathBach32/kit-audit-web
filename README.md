@@ -1,8 +1,9 @@
 # Kit d'audit web libre
 
 Une commande par audit, l'adresse du site en paramètre, les résultats rangés par site et par date,
-et une synthèse PDF produite automatiquement. Les outils sont libres ou gratuits ; les versions
-sont figées pour que deux audits soient comparables.
+et une synthèse PDF produite automatiquement. Les outils sont libres, à deux exceptions près : le
+navigateur Google Chrome (s'il est préféré à Chromium) et le service PageSpeed Insights de Google
+(facultatif). Les versions sont figées pour que deux audits soient comparables.
 
 Origine : scripts écrits pour un audit réel de site (octobre 2026), puis généralisés.
 
@@ -14,8 +15,7 @@ Origine : scripts écrits pour un audit réel de site (octobre 2026), puis gén�
 ```
 
 Prérequis du système : Google Chrome, Node ≥ 22.19, Python 3 avec `venv`, `curl`, `dig`, `openssl`.
-Facultatifs : Screaming Frog SEO Spider (pour `bin/sf-crawl`) et `docker buildx` (pour construire
-l'image SEOnaut).
+Facultatif : `docker buildx` (pour construire l'image SEOnaut).
 
 La clé PageSpeed Insights se range **hors du dépôt**, dans `~/.config/audit-kit/secrets.env`
 (droits 600) : `PSI_API_KEY=…`. Elle est lue sans exécuter le fichier, et transmise dans un en-tête
@@ -36,8 +36,7 @@ d'audit imposé), et selon les commandes `--pages FICHIER` (liste d'URL) et `--m
 | Commande | Outil | Ce qu'elle produit |
 |---|---|---|
 | `entetes` | curl, openssl, dig, RDAP | en-têtes de sécurité, redirections, certificat, DNS (SPF, DMARC, DNSSEC, CAA), domaine |
-| `sf-crawl` | Screaming Frog 24.3 (gratuit) | 3 passes pour contourner le plafond de 500 URL : crawl, sitemap, toutes les pages HTML connues (par lots) |
-| `seo` | advertools 0.18 | crawl complet sans plafond et contrôles : title, description, H1, texte, canonique, doublons, orphelines |
+| `seo` | advertools 0.18 | exploration du site (liens, redirections, pages du sitemap qu'aucun lien n'atteint) et une quarantaine de contrôles SEO |
 | `inventaire` | Python | contenus (API WordPress si disponible), métadonnées, liens, poids des images, vidéos YouTube |
 | `liens` | lychee 0.24.2 | liens cassés ; les services anti-robots sont listés à part, « à vérifier dans un navigateur » |
 | `accessibilite` | pa11y-ci 4.1.1 + axe | problèmes WCAG 2.1 AA par page et par règle |
@@ -49,14 +48,35 @@ d'audit imposé), et selon les commandes `--pages FICHIER` (liste d'URL) et `--m
 
 Les pages types sont l'accueil, les quatre pages les moins profondes du sitemap et une page
 profonde (un article, en général). Les commandes qui parcourent tout le site réutilisent la liste
-des pages HTML trouvée par `sf-crawl` (`urls_html.txt`), sinon celle de `seo`, sinon le sitemap.
+des pages HTML trouvée par `seo` (`urls_html.txt` : l'accueil d'abord, puis par profondeur, les
+pages orphelines à la fin), sinon le sitemap.
+
+## Exploration et contrôles SEO
+
+`bin/seo` explore le site depuis l'accueil en suivant les liens (respect de `robots.txt`, débit
+modéré, 2 000 adresses au plus par défaut, réglable avec `--max`). Les redirections sont
+enregistrées (`seo/redirections.csv`) puis leurs destinations explorées ; les pages du sitemap
+qu'aucun lien n'atteint sont téléchargées à leur tour : ce sont les pages orphelines.
+
+Chaque constat porte un code du catalogue [`config/problemes.csv`](config/problemes.csv) :
+libellé, catégorie, gravité (haute, moyenne, basse), explication et correction en langage courant.
+La synthèse reprend ce catalogue ; le détail page par page est dans `seo/problemes.csv`. Les
+contrôles couvrent les codes de réponse et les soft 404, l'indexation (noindex en balise ou en
+en-tête, canonique absente, ailleurs ou cassée, meta refresh, sitemap), les title et descriptions
+(absents, en double, longueur en caractères et en pixels), les titres H1 et H2, le texte, les
+contenus identiques ou presque, les images sans `alt`, les liens (sans texte, nofollow, vers des
+redirections), la profondeur, la lenteur du serveur, les en-têtes de sécurité de chaque page et la
+lisibilité des adresses.
+
+Le dossier `tests/site-temoin` contient un petit site dont les défauts sont connus, servi par
+`python3 tests/serveur_temoin.py [PORT]` : il permet de vérifier que chaque contrôle fonctionne.
 
 ## Résultats
 
 ```
 resultats/<domaine>/<AAAA-MM-JJ>/
 ├── site.txt, urls_sitemap.txt, urls_html.txt, journal.txt, manifeste.json
-├── entetes/  sf/  seo/  inventaire/  liens/  accessibilite/
+├── entetes/  seo/  inventaire/  liens/  accessibilite/
 ├── lighthouse/  psi/  unlighthouse/  captures/
 └── synthese/synthese.pdf
 ```
@@ -71,17 +91,17 @@ sous-dossier.
   (Facebook, Instagram, LinkedIn, X, HelloAsso, `wordpress.com/log-in`, `?share=`). Ajouter ici les
   nouveaux cas rencontrés.
 - `config/exclusions_pages.txt` : adresses qui ne sont pas des pages (administration, flux,
-  partage) ; utilisé par `sf-crawl` et `seo`.
+  partage) ; utilisé par `seo`.
+- `config/problemes.csv` : catalogue des constats SEO (libellés, gravités, explications).
 - `config/pa11y.json` : norme, moteur axe, une page à la fois (plus stable que deux).
 - `config/unlighthouse.config.mjs` : mobile avec bridage, aucun échantillonnage des pages.
 
 ## Limites connues
 
-- Screaming Frog gratuit : 500 URL par crawl, **liens externes et ressources compris** ; le mode
-  liste contourne ce plafond pour les pages, par lots de 400. Les exports sont nommés dans la
-  langue de l'interface (le kit lit le français et l'anglais).
 - Les tests automatiques d'accessibilité ne trouvent qu'une partie des problèmes.
-- advertools ne distingue pas un `alt` absent d'un `alt=""` décoratif ; axe, si.
+- `bin/seo` lit le HTML envoyé par le serveur, sans exécuter le JavaScript : un site entièrement
+  construit dans le navigateur doit être audité avec les outils fondés sur Chrome (Lighthouse,
+  Unlighthouse, pa11y).
 - Ne pas créer ni supprimer de réseaux Docker (`docker compose up/down`) pendant un audit :
   Chrome interrompt alors ses chargements (`ERR_NETWORK_CHANGED`), ce qui fausse Lighthouse,
   Unlighthouse et pa11y.

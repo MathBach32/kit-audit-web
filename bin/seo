@@ -3,18 +3,23 @@
 # Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
 # SPDX-License-Identifier: EUPL-1.2
 #
-# Analyse SEO avec advertools (Python) : robots.txt, sitemaps, crawl complet sans plafond (Scrapy,
-# respect de robots.txt, débit modéré) et contrôles des pages : title, meta description, H1,
-# texte, canonique, noindex, images sans texte alternatif, profondeur, doublons, pages orphelines.
+# Exploration du site et contrôles SEO avec advertools (Scrapy, respect de robots.txt, débit
+# modéré) : liens depuis l'accueil, redirections, pages du sitemap qu'aucun lien n'atteint
+# (orphelines). Une quarantaine de contrôles, décrits dans config/problemes.csv : codes de réponse,
+# indexation (noindex, canonique, sitemap), title et description (longueur en caractères et en
+# pixels), titres H1 et H2, texte, contenus en double, images sans alt, liens, profondeur, lenteur,
+# en-têtes de sécurité, adresses.
 #
 # Usage : bin/seo URL [--max N] [--dossier DOSSIER]
-#   --max  nombre maximal de pages explorées (défaut 2000)
+#   --max  nombre maximal d'adresses explorées (défaut 2000)
 #
-# Sortie : seo/crawl.jsonl, robots.csv, sitemap.csv, pages.csv, problemes.csv, resume.json
-# et urls_html_advertools.txt à la racine du dossier d'audit.
+# Sortie : seo/pages.csv, liens.csv, redirections.csv, problemes.csv, resume.json, crawl*.jsonl,
+# robots.csv, sitemap.csv ; et urls_html.txt à la racine du dossier d'audit (pages HTML en 200),
+# reprise par inventaire, liens, accessibilite et unlighthouse.
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 OPTIONS="--max"
 lire_arguments "$@"
 [ -x "$KIT_RACINE/.venv/bin/python" ] || echec "environnement Python absent : lancer ./installer.sh"
 preparer_sortie seo
+rm -f "$DOSSIER_AUDIT/urls_html.txt" "$DOSSIER_AUDIT/urls_html_advertools.txt"   # jamais de liste périmée
 "$PYTHON" -m seo_advertools "$SITE_URL" "$SORTIE" "${OPTS[--max]:-2000}"

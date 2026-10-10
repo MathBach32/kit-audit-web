@@ -89,11 +89,11 @@ urls_sitemap() {
 }
 
 # pages_a_auditer : écrit $SORTIE/pages.txt et renvoie son chemin. Par ordre de préférence :
-# --pages, pages HTML connues de Screaming Frog, du crawl advertools, du sitemap, sinon l'accueil.
-# --max N limite le nombre de pages.
+# --pages, pages HTML trouvées par bin/seo (liens et sitemap, l'accueil d'abord), le sitemap,
+# sinon l'accueil. --max N limite le nombre de pages (les moins profondes d'abord).
 pages_a_auditer() {
   local f source=""
-  for f in "${OPTS[--pages]:-}" "$DOSSIER_AUDIT/urls_html.txt" "$DOSSIER_AUDIT/urls_html_advertools.txt" "$(urls_sitemap)"; do
+  for f in "${OPTS[--pages]:-}" "$DOSSIER_AUDIT/urls_html.txt" "$(urls_sitemap)"; do
     if [ -n "$f" ] && [ -s "$f" ]; then source="$f"; break; fi
   done
   if [ -n "$source" ]; then

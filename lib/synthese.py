@@ -6,7 +6,8 @@
   python3 -m synthese DOSSIER_AUDIT   → DOSSIER_AUDIT/synthese/synthese.html et synthese.pdf
 
 Lit les résultats présents ; un outil non exécuté est signalé sans bloquer. Le document est
-factuel : chiffres, constats automatiques et voyants indicatifs, sans recommandations rédigées.
+factuel : chiffres, constats automatiques et voyants indicatifs ; les constats SEO reprennent les
+explications et corrections génériques du catalogue config/problemes.csv.
 """
 import datetime as dt
 import html
@@ -19,13 +20,13 @@ import urllib.parse
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from kit import colonne, lire_csv
+from kit import lire_catalogue, lire_csv
 
 RACINE = Path(__file__).resolve().parents[1]
 CHROME = os.environ.get("CHROME_PATH", "/usr/bin/google-chrome")
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 OUTILS = {  # sous-dossier → libellé
-    "entetes": "En-têtes, TLS, DNS, domaine", "sf": "Screaming Frog SEO Spider", "seo": "advertools (SEO)",
+    "entetes": "En-têtes, TLS, DNS, domaine", "seo": "advertools (exploration et SEO)",
     "inventaire": "Inventaire des contenus", "liens": "lychee (liens)", "accessibilite": "pa11y-ci + axe (accessibilité)",
     "lighthouse": "Lighthouse local", "psi": "PageSpeed Insights", "unlighthouse": "Unlighthouse", "captures": "Captures d'écran",
 }
@@ -204,53 +205,45 @@ class Synthese:
 
     # --- Référencement ---------------------------------------------------------------------------
     def referencement(self):
-        parties = []
         seo = lire_json(self.d / "seo/resume.json") if self.present("seo") else None
-        nb_pages = None
-        if seo:
-            nb_pages = seo["pages_html"]
-            parties.append(f"<h3>Contrôles automatiques (advertools)</h3><p>{seo['pages_html']} pages HTML explorées en suivant les liens, "
-                           f"{seo['sitemap']} pages déclarées dans le sitemap, texte médian de {seo['mots_median']} mots, "
-                           f"profondeur maximale de {seo['profondeur_max']} clics depuis l'accueil.</p>"
-                           + tableau(["Constat", "#Pages"], [[k, n] for k, n in seo["problemes"].items()]))
-            if seo.get("plafond_atteint"):
-                parties.append('<p class="petit">Le nombre maximal de pages explorées a été atteint : relancer bin/seo avec --max.</p>')
-        if self.present("sf"):
-            base = self.d / "sf/3-liste" if (self.d / "sf/3-liste/interne_tous.csv").exists() else self.d / "sf/1-crawl"
-            interne = lire_csv(base / "interne_tous.csv") or lire_csv(base / "internal_all.csv")
-            html_ = [l for l in interne if "html" in colonne(l, "Type de contenu", "Content Type").lower()]
-            if html_:
-                nb_pages = max(nb_pages or 0, len(html_))
-                codes = Counter(colonne(l, "Code HTTP", "Status Code") for l in html_)
-                index = Counter(colonne(l, "Indexabilité", "Indexability") for l in html_)
-                parties.append(f"<h3>Screaming Frog : {len(html_)} pages HTML</h3><p>Codes de réponse : "
-                               + ", ".join(f"{k} × {n}" for k, n in codes.most_common()) + ". Indexabilité : "
-                               + ", ".join(f"{k.lower()} × {n}" for k, n in index.most_common()) + ".</p>")
-            problemes = lire_csv(base / "rapport_aperçu_problemes.csv") or lire_csv(base / "issues_overview_report.csv")
-            if problemes:
-                problemes.sort(key=lambda l: -int(colonne(l, "URL", "URLs") or 0))
-                parties.append(tableau(["Problème relevé par Screaming Frog", "Type", "Priorité", "#URL"],
-                                       [[colonne(l, "Nom du problème", "Issue Name"), colonne(l, "Type de problème", "Issue Type"),
-                                         colonne(l, "Priorité du problème", "Issue Priority"), colonne(l, "URL", "URLs")]
-                                        for l in problemes[:25]]))
-            if (self.d / "sf/3-liste/lots/lot-01.txt").exists():
-                parties.append('<p class="petit">Passe 3 en plusieurs lots : le tableau des problèmes ne porte que sur le premier lot.</p>')
-            apercu = (self.d / "sf/1-crawl/aperçu_du_crawl.csv")
-            if apercu.exists() and re.search(r'"Total des URL rencontrées","500"', apercu.read_text(encoding="utf-8-sig")):
-                parties.append('<p class="petit">Le crawl normal a atteint le plafond de 500 URL de la version gratuite ; '
-                               "les données ci-dessus viennent du crawl en mode liste de toutes les pages connues.</p>")
-        if nb_pages:
-            self.chiffres.insert(0, (str(nb_pages), "pages HTML trouvées"))
-        if not parties:
-            self.voyant("Référencement", "gris", "Aucune analyse SEO.")
+        if not seo or not seo.get("pages_html"):
+            self.voyant("Référencement", "gris", "Exploration impossible." if seo and seo.get("erreur") else "Aucune analyse SEO.")
+            if seo and seo.get("erreur"):
+                self.section("Référencement naturel", f"<p>Exploration impossible : {t(seo['erreur'])}</p>")
             return
-        if seo:
-            majeurs = sum(n for k, n in seo["problemes"].items()
-                          if k.startswith(("erreur", "title absent", "H1 absent", "title en double", "meta description absente")))
-            part = majeurs / max(seo["pages_html"], 1)
-            couleur = "vert" if majeurs == 0 else "orange" if part < 0.2 else "rouge"
-            self.voyant("Référencement", couleur, f"{majeurs} constat(s) majeur(s) (erreurs, titres absents ou en double, H1 absents, "
-                                                 f"descriptions absentes) pour {seo['pages_html']} pages.")
+        n, catalogue = seo["pages_html"], lire_catalogue()
+        self.chiffres.insert(0, (str(n), "pages HTML trouvées"))
+        codes = ", ".join(f"{k} × {v}" for k, v in sorted(seo["codes"].items()))
+        parties = [f"<p>{n} pages HTML analysées : {seo['pages_explorees']} atteintes en suivant les liens depuis l'accueil"
+                   + (f", {seo['pages_sitemap_seules']} trouvées seulement par le sitemap" if seo.get("pages_sitemap_seules") else "")
+                   + f" ; {seo['pages_indexables']} indexables. Codes de réponse : {codes}"
+                   + (f", et {seo['redirections']} adresses redirigées" if seo.get("redirections") else "")
+                   + f". Sitemap : {seo['sitemap']} adresses. Texte médian : {seo['mots_median']} mots ; "
+                   f"profondeur maximale : {seo['profondeur_max']} clics depuis l'accueil.</p>"]
+        if seo.get("redirection_depart"):
+            parties.append(f'<p class="petit">L\'adresse demandée redirige vers {t(seo["redirection_depart"])} : '
+                           "l'exploration part de cette adresse.</p>")
+        ordre, classes = {"haute": 0, "moyenne": 1, "basse": 2}, {"haute": "rouge", "moyenne": "orange", "basse": "jaune"}
+        inconnu = {"libelle": "", "categorie": "", "gravite": "basse", "explication": "", "correction": ""}
+        constats = sorted(((catalogue.get(c, {**inconnu, "libelle": c}), nb) for c, nb in seo["problemes"].items()),
+                          key=lambda x: (ordre.get(x[0]["gravite"], 3), -x[1]))
+        if constats:
+            parties.append(tableau(["Constat", "Catégorie", "Gravité", "#Pages"],
+                                   [[e["libelle"], e["categorie"], pastille(classes.get(e["gravite"], ""), e["gravite"]), nb]
+                                    for e, nb in constats]))
+            conseils = "".join(f"<dt>{t(e['libelle'])}</dt><dd>{t(e['explication'])} <em>Correction :</em> {t(e['correction'])}</dd>"
+                               for e, nb in constats if e["gravite"] in ("haute", "moyenne") and e["explication"])
+            if conseils:
+                parties.append(f'<h3>Constats de gravité haute ou moyenne : explications</h3><dl class="conseils">{conseils}</dl>')
+        parties.append('<p class="petit">Détail page par page : seo/problemes.csv ; pages : seo/pages.csv ; liens internes : '
+                       "seo/liens.csv ; redirections : seo/redirections.csv.</p>")
+        if seo.get("plafond_atteint"):
+            parties.append('<p class="petit">Le nombre maximal d\'adresses explorées a été atteint : relancer bin/seo avec --max.</p>')
+        hautes = seo.get("pages_par_gravite", {}).get("haute", 0)
+        part = hautes / max(n, 1)
+        couleur = "vert" if hautes == 0 else "orange" if part < 0.2 else "rouge"
+        self.voyant("Référencement", couleur, f"{hautes} page(s) sur {n} avec au moins un constat de gravité haute "
+                                              "(erreurs, title, description ou H1 absents, title en double, canonique cassée).")
         self.section("Référencement naturel", "".join(parties))
 
     # --- Liens -----------------------------------------------------------------------------------

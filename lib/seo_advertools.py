@@ -462,6 +462,9 @@ def principal(url, dossier, max_pages=2000):
     for pb in problemes:
         pages_par_code[pb["code"]].add(normaliser(pb["url"]))
     profondeurs = [p["profondeur"] for p in pages if isinstance(p["profondeur"], int)]
+    par_gravite = defaultdict(set)
+    for pb in problemes:
+        par_gravite[pb["gravite"]].add(normaliser(pb["url"]))
     resume.update({
         "site": depart, "pages_html": len(pages), "pages_explorees": sum(p["source"] == "liens" for p in pages),
         "pages_sitemap_seules": sum(p["source"] == "sitemap" for p in pages),
@@ -470,6 +473,7 @@ def principal(url, dossier, max_pages=2000):
         "sitemap": len(urls_sitemap), "orphelines": len(pages_par_code.get("orpheline", ())),
         "mots_median": int(pages_df["mots"].median()), "profondeur_max": max(profondeurs, default=0),
         "problemes": {c: len(v) for c, v in sorted(pages_par_code.items(), key=lambda kv: -len(kv[1]))},
+        "pages_par_gravite": {g: len(par_gravite.get(g, ())) for g in ("haute", "moyenne", "basse")},
         "constats": len(problemes), "liens_internes": len(liens),
     })
     (d / "resume.json").write_text(json.dumps(resume, ensure_ascii=False, indent=1), encoding="utf-8")
