@@ -275,13 +275,13 @@ class Travail:
             if not self.en_cours():
                 return False
             self.arret_demande = True
+        self.ajouter("[interface] arrêt demandé : signal envoyé à l'audit et à ses processus")
         pids = descendants(self.proc.pid)
         try:
             os.killpg(self.proc.pid, signal.SIGTERM)
         except ProcessLookupError:
             pass
         signaler(pids, signal.SIGTERM)
-        self.ajouter("[interface] arrêt demandé : signal envoyé à l'audit et à ses processus")
 
         def achever():
             try:

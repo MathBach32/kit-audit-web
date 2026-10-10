@@ -194,7 +194,8 @@ function afficherTravail(t) {
   $("#suivi-site").textContent = t.site;
   const temps = actif ? `en cours depuis ${duree(maintenant - t.debut)}`
     : `terminé à ${formatHeure.format(new Date(t.fin * 1000))}, durée ${duree(t.fin - t.debut)}`;
-  $("#suivi-meta").textContent = `Commencé à ${formatHeure.format(new Date(t.debut * 1000))}, ${temps}. Dossier : ${t.dossier}`;
+  $("#suivi-meta").textContent = `Commencé à ${formatHeure.format(new Date(t.debut * 1000))}, ${temps}. Résultats : ${t.chemin || t.dossier}`;
+  $("#suivi-meta").title = t.dossier;
   const [libelle, couleur] = STATUTS[t.statut] || [t.statut, "gris"];
   $("#suivi-statut").replaceWith(el("span", { id: "suivi-statut", classe: `pastille ${couleur}` }, libelle));
   $("#suivi-outils").replaceChildren(...t.outils.map((o) => {
