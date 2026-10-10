@@ -37,9 +37,35 @@ EOF
 )"
   options+=(--urls "$chemins")
 fi
+# Unlighthouse laisse un navigateur sans tête en partant, et puppeteer lance chaque navigateur dans sa
+# propre session, hors du groupe d'unlighthouse-ci. Celui-ci tourne donc dans son propre groupe de
+# processus (setsid), avec les profils de ses navigateurs dans un dossier temporaire qui lui est propre
+# (PUPPETEER_TMP_DIR) ; nettoyer arrête ce qui reste, à la fin comme sur interruption.
+TEMPORAIRE="$(mktemp -d -t kit-unlighthouse.XXXXXX)" || echec "dossier temporaire impossible à créer"
+GROUPE=""
+# nettoyer : arrête les processus restants du groupe d'unlighthouse-ci et les navigateurs dont le profil
+# est dans $TEMPORAIRE (reconnu à son suffixe aléatoire) : SIGTERM, puis SIGKILL après 3 s ; supprime
+# ensuite $TEMPORAIRE.
+nettoyer() {
+  local essai restants
+  for essai in 1 2 3 4 5 6 7 8 9 10 11; do
+    mapfile -t restants < <([ -n "$GROUPE" ] && pgrep -g "$GROUPE"; pgrep -f -- "/kit-unlighthouse\\.${TEMPORAIRE##*.}/puppeteer_dev_")
+    [ "${#restants[@]}" -gt 0 ] || break
+    kill -s "$([ "$essai" -le 10 ] && echo TERM || echo KILL)" "${restants[@]}" 2> /dev/null
+    sleep 0.3
+  done
+  rm -rf -- "$TEMPORAIRE"
+}
+trap 'nettoyer; exit 130' INT
+trap 'nettoyer; exit 143' TERM HUP
 # Unlighthouse exige un dossier de sortie qui lui soit propre ; il écrit aussi dans le dossier courant
-(cd "$SORTIE" && unlighthouse-ci --site "$SITE_URL" --config-file "$KIT_RACINE/config/unlighthouse.config.mjs" \
-  --output-path "$SORTIE/rapport" --no-cache "${options[@]}" < /dev/null > "$SORTIE/journal.txt" 2>&1)
+(cd "$SORTIE" && PUPPETEER_TMP_DIR="$TEMPORAIRE" exec setsid unlighthouse-ci --site "$SITE_URL" \
+  --config-file "$KIT_RACINE/config/unlighthouse.config.mjs" --output-path "$SORTIE/rapport" --no-cache \
+  "${options[@]}") < /dev/null > "$SORTIE/journal.txt" 2>&1 &
+GROUPE=$!
+wait "$GROUPE"
 code=$?
+nettoyer
+trap - INT TERM HUP
 [ -s "$SORTIE/rapport/ci-result.json" ] || echec "Unlighthouse a échoué (code $code, voir journal.txt)"
 "$PYTHON" -m unlighthouse_resume "$SORTIE"
