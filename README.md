@@ -29,11 +29,12 @@ Chrome est construit par Google à partir de Chromium, mais n'installe pas de co
 L'un ou l'autre suffit.
 
 Le navigateur est détecté automatiquement (`lib/kit.py`), dans cet ordre : `google-chrome-stable`,
-`google-chrome`, `chromium`, `chromium-browser`, `/snap/bin/chromium`, `/usr/lib/chromium/chromium`,
+`google-chrome`, `chromium`, `/snap/bin/chromium`, `chromium-browser`, `/usr/lib/chromium/chromium`,
 `/opt/google/chrome/chrome`. Un candidat n'est retenu que s'il répond à `--version` par une version
 de Chrome ou de Chromium : sur Ubuntu, `chromium-browser` peut n'être qu'un script qui propose
-d'installer le snap. `./installer.sh` affiche le navigateur retenu, et `manifeste.json` (clé
-« Navigateur ») celui de chaque audit.
+d'installer le snap, ou qui renvoie vers lui. `./installer.sh` affiche le navigateur retenu, et
+`manifeste.json` (clé « Navigateur ») celui de chaque audit ; le Chromium du snap s'y signale par sa
+version (« Chromium … snap »).
 
 Pour en imposer un : `CHROME_PATH=/chemin/du/navigateur bin/tout exemple.fr`. Le chemin imposé est
 utilisé tel quel : s'il n'est pas exécutable, ou s'il ne répond pas à `--version` comme Google Chrome

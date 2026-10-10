@@ -35,11 +35,14 @@ done
 python3 -c 'import venv, ensurepip' 2> /dev/null && ok "python3-venv" || manque "python3-venv (sudo apt install python3-venv)"
 # Navigateur : même détection que les commandes du kit (lib/kit.py), CHROME_PATH pour en imposer un
 if CHROME="$(python3 lib/kit.py navigateur 2> /dev/null)"; then
-  ok "Navigateur : $(python3 lib/kit.py version-navigateur "$CHROME" | grep . || echo "version inconnue") ($CHROME)"
+  VERSION_CHROME="$(python3 lib/kit.py version-navigateur "$CHROME")"
+  ok "Navigateur : ${VERSION_CHROME:-version inconnue} ($CHROME)"
   [ "${KIT_NAVIGATEUR_LIBRE:-}" = 1 ] && [ -n "${CHROME_PATH:-}" ] && info "KIT_NAVIGATEUR_LIBRE=1 : navigateur imposé accepté sans contrôle de version"
-  case "$(readlink -f "$CHROME")" in
-    */snap|/snap/*) info "Chromium en snap : pas d'accès aux dossiers cachés de \$HOME ni au /tmp de l'hôte ; garder les résultats sous \$HOME, hors dossier caché (défaut : ${KIT_AUDIT_RESULTATS:-$PWD/resultats})" ;;
-  esac
+  # Snap : repéré par sa version (« … snap », même derrière le script chromium-browser) ou par son chemin
+  CHROME_REEL="$(readlink -f "$CHROME")"
+  if [[ "$VERSION_CHROME" == *" snap" || "$CHROME_REEL" == */snap || "$CHROME_REEL" == /snap/* ]]; then
+    info "Chromium en snap : pas d'accès aux dossiers cachés de \$HOME ni au /tmp de l'hôte ; garder les résultats sous \$HOME, hors dossier caché (défaut : ${KIT_AUDIT_RESULTATS:-$PWD/resultats})"
+  fi
 else
   manque "navigateur : $(python3 lib/kit.py navigateur 2>&1 > /dev/null)"
 fi

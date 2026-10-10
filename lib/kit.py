@@ -9,7 +9,7 @@ Utilisable aussi en ligne de commande depuis les scripts shell :
   python3 -m kit slug URL          → identifiant de fichier lisible (« accueil », « edition-2026 »…)
   python3 -m kit navigateur        → chemin du navigateur (CHROME_PATH, sinon Google Chrome ou Chromium détecté)
                                      KIT_NAVIGATEUR_LIBRE=1 : CHROME_PATH accepté sans contrôle de version
-  python3 -m kit version-navigateur CHEMIN → « Google Chrome 155.0… » ou « Chromium 157.0… »
+  python3 -m kit version-navigateur CHEMIN → « Google Chrome 155.0… », « Chromium 157.0… » (« … snap » pour le snap)
 """
 import csv
 import os
@@ -27,10 +27,11 @@ UA = os.environ.get("KIT_UA", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.3
 EXTENSIONS_RESSOURCES = re.compile(
     r"\.(jpe?g|png|gif|webp|avif|svg|ico|bmp|tiff?|pdf|zip|gz|mp[34]|m4a|mov|avi|webm|ogg|wav|"
     r"css|js|json|xml|txt|woff2?|ttf|otf|eot|docx?|xlsx?|pptx?|odt|ods)$", re.I)
-# Navigateurs reconnus, par ordre de préférence : Google Chrome, puis Chromium (paquet, snap ou chemin direct)
-NAVIGATEURS = ("google-chrome-stable", "google-chrome", "chromium", "chromium-browser", "/snap/bin/chromium",
+# Navigateurs reconnus, par ordre de préférence : Google Chrome, puis Chromium (paquet, snap ou chemin direct).
+# Le snap passe avant chromium-browser, qui sur Ubuntu n'est qu'un script de transition vers lui.
+NAVIGATEURS = ("google-chrome-stable", "google-chrome", "chromium", "/snap/bin/chromium", "chromium-browser",
                "/usr/lib/chromium/chromium", "/opt/google/chrome/chrome")
-VERSION_NAVIGATEUR = re.compile(r"^(Google Chrome|Chromium)\b.*?\d+(\.\d+)+", re.M)
+VERSION_NAVIGATEUR = re.compile(r"^(Google Chrome|Chromium)\b.*?\d+(\.\d+)+( snap)?", re.M)
 DELAI_VERSION = 5  # secondes accordées à « navigateur --version »
 
 
@@ -110,7 +111,8 @@ def lire_liste(chemin):
 
 
 def version_navigateur(chemin):
-    """« Google Chrome 155.0.8059.39 » ou « Chromium 157.0.8097.0 » selon « chemin --version » ;
+    """« Google Chrome 155.0.8059.39 » ou « Chromium 157.0.8097.0 » selon « chemin --version », suivi
+    de « snap » pour le Chromium du snap, même atteint par un script de transition (chromium-browser) ;
     "" si chemin n'est ni Google Chrome ni Chromium (sur Ubuntu, chromium-browser peut n'être qu'un
     script qui propose d'installer le snap).
 
