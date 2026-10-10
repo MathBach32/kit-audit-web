@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
 # Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
 # SPDX-License-Identifier: EUPL-1.2
-"""Synthèse automatique d'un audit : HTML puis PDF (Chrome headless).
+"""Synthèse automatique d'un audit : HTML puis PDF (navigateur sans interface : Google Chrome ou Chromium).
 
   python3 -m synthese DOSSIER_AUDIT   → DOSSIER_AUDIT/synthese/synthese.html et synthese.pdf
 
@@ -11,7 +11,6 @@ factuel : chiffres, constats automatiques et voyants indicatifs, sans recommanda
 import datetime as dt
 import html
 import json
-import os
 import re
 import subprocess
 import sys
@@ -19,10 +18,10 @@ import urllib.parse
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from kit import colonne, lire_csv
+from kit import colonne, lire_csv, navigateur, sans_navigateur
 
 RACINE = Path(__file__).resolve().parents[1]
-CHROME = os.environ.get("CHROME_PATH", "/usr/bin/google-chrome")
+CHROME = navigateur()  # CHROME_PATH (défini par lib/commun.sh), sinon Google Chrome ou Chromium détecté
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 OUTILS = {  # sous-dossier → libellé
     "entetes": "En-têtes, TLS, DNS, domaine", "sf": "Screaming Frog SEO Spider", "seo": "advertools (SEO)",
@@ -143,7 +142,7 @@ class Synthese:
     # --- Performance -----------------------------------------------------------------------------
     def performance(self):
         parties, perf_mobile, lcp_mobile = [], [], []
-        for outil, nom in (("psi", "PageSpeed Insights (Lighthouse chez Google)"), ("lighthouse", "Lighthouse local (Chrome du poste)")):
+        for outil, nom in (("psi", "PageSpeed Insights (Lighthouse chez Google)"), ("lighthouse", "Lighthouse local (navigateur du poste)")):
             lignes = lire_csv(self.d / outil / "resume.csv")
             if not lignes:
                 continue
@@ -451,6 +450,9 @@ def principal(dossier):
     page = sortie / "synthese.html"
     page.write_text(s.html(), encoding="utf-8")
     pdf = sortie / "synthese.pdf"
+    if not CHROME:
+        print(f"{page} produit, PDF impossible : {sans_navigateur()}", file=sys.stderr)
+        return 1
     subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--no-pdf-header-footer", "--allow-file-access-from-files",
                     f"--print-to-pdf={pdf}", page.as_uri()], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     print(f"→ {page}\n→ {pdf}")
