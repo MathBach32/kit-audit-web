@@ -732,6 +732,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if any(p.startswith(".") for p in cible.relative_to(RESULTATS).parts) or not cible.is_file():
             raise Refus(404, "Fichier introuvable.")
         type_contenu = mimetypes.guess_type(cible.name)[0] or "application/octet-stream"
+        if "javascript" in type_contenu or cible.suffix.lower() in (".js", ".mjs", ".cjs"):
+            type_contenu = "text/plain"   # avec nosniff, un script des résultats ne s'exécute jamais dans la page
         if type_contenu.startswith("text/") or type_contenu in ("application/json", "image/svg+xml"):
             type_contenu += "; charset=utf-8"
         with cible.open("rb") as f:
