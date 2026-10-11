@@ -367,8 +367,12 @@ function viderLignes() {   // ajout groupé : un seul calcul de mise en page par
 async function arreter() {
   if (!window.confirm("Arrêter l'audit en cours ? Les outils déjà terminés gardent leurs résultats.")) return;
   try {
-    afficherTravail(await api("/api/arreter", {}));
-    annoncer("Arrêt demandé.");
+    const t = await api("/api/arreter", {});
+    // le flux a pu annoncer la fin avant cette réponse : ne pas revenir à un état « en cours » périmé
+    if (travail && travail.id === t.id && travail.statut === "en_cours") {
+      afficherTravail(t);
+      annoncer("Arrêt demandé.");
+    }
   } catch (e) {
     annoncer(e.message);
   }
