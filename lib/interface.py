@@ -19,6 +19,7 @@ Sécurité (une page web malveillante peut viser un serveur local) :
 """
 import argparse
 import datetime as dt
+import fcntl
 import ipaddress
 import itertools
 import json
@@ -133,6 +134,24 @@ def dossier_audit(nom_domaine, jour):
     if not d.is_relative_to(RESULTATS) or not d.is_dir():
         raise Refus(404, "Audit introuvable.")
     return d
+
+
+def dossier_occupe(d):
+    """Vrai si un bin/tout ou un bin/synthese tient le verrou du dossier d'audit (flock sur .verrou,
+    voir verrouiller_dossier dans lib/commun.sh), qu'il ait été lancé par l'interface ou non."""
+    try:
+        fd = os.open(d / ".verrou", os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)   # essai seulement : relâché aussitôt
+        return False
+    except BlockingIOError:
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
 
 
 # --- Processus ---------------------------------------------------------------------------------
@@ -365,6 +384,7 @@ def decrire_audit(d, libelles, travail):
         "synthese": (d / "synthese/synthese.html").is_file(), "pdf": pdf.is_file(),
         "pdf_date": dt.datetime.fromtimestamp(pdf.stat().st_mtime).isoformat(timespec="minutes") if pdf.is_file() else None,
         "en_cours": bool(travail and travail.en_cours() and travail.dossier == d),
+        "occupe": dossier_occupe(d),     # audit en cours, y compris lancé en ligne de commande
     }
 
 
@@ -658,6 +678,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
             raise Refus(400, f"Outil inconnu : {', '.join(inconnus)[:200]}.")
         maxi, voisins = valider_max(donnees.get("max")), valider_voisins(donnees.get("voisins"))
         dossier = RESULTATS / domaine(url) / dt.date.today().isoformat()
+        if dossier_occupe(dossier):
+            raise Refus(409, "Un audit de ce site est déjà en cours aujourd'hui, lancé hors de l'interface : attendre sa fin.")
         commande = [str(RACINE / "bin/tout"), url, "--dossier", str(dossier)]
         sans = [n for n in noms if n not in choisis]
         if sans:
@@ -676,6 +698,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
 
     def _regenerer_pdf(self, donnees):
         d = dossier_audit(donnees.get("domaine"), donnees.get("date"))
+        if dossier_occupe(d):
+            raise Refus(409, "Un audit est en cours dans ce dossier : attendre sa fin avant de regénérer la synthèse.")
         try:
             url = valider_url((d / "site.txt").read_text(encoding="utf-8").strip())
         except OSError:

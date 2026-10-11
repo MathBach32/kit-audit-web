@@ -41,6 +41,7 @@ if [ "${1:-}" = --liste-outils ]; then
 fi
 lire_arguments "$@"
 definir_dossier
+verrouiller_dossier                           # avant de toucher à .etats.tsv et au journal
 export KIT_AUDIT_DOSSIER="$DOSSIER_AUDIT"     # même dossier pour toutes les commandes, même après minuit
 SANS=",${OPTS[--sans]:-},"; SEULEMENT="${OPTS[--seulement]:+,${OPTS[--seulement]},}"
 JOURNAL="$DOSSIER_AUDIT/journal.txt"
@@ -51,7 +52,7 @@ lancer() {
   local cmd="$1"; shift
   local debut=$SECONDS
   journal "=== $cmd" 2>&1 | tee -a "$JOURNAL" >&2
-  "$KIT_RACINE/bin/$cmd" "$SITE_URL" "$@" 2>&1 | tee -a "$JOURNAL"
+  { "$KIT_RACINE/bin/$cmd" "$SITE_URL" "$@" 2>&1 | tee -a "$JOURNAL"; } 9>&-   # verrou non hérité (Chrome orphelin)
   local code=${PIPESTATUS[0]}
   DERNIER_CODE=$code
   printf '%s\t%s\t%s\n' "$cmd" "$code" "$((SECONDS - debut))" >> "$ETATS"
@@ -70,7 +71,7 @@ for cmd in "${ORDRE[@]}"; do
 done
 
 # Manifeste : outils lancés, codes de retour, durées et versions
-"$PYTHON" - "$DOSSIER_AUDIT" "$SITE_URL" <<'PY'
+"$PYTHON" - "$DOSSIER_AUDIT" "$SITE_URL" 9>&- <<'PY'
 import json, subprocess, sys
 from pathlib import Path
 d = Path(sys.argv[1])

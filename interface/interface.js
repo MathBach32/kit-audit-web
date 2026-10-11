@@ -309,7 +309,7 @@ function carteAudit(a, rang) {
   return el("article", { classe: "carte audit", "aria-labelledby": titre },
     el("div", { classe: "audit-tete" },
       el("div", {}, el("h3", { id: titre }, a.domaine), el("time", { datetime: a.date }, dateFr(a.date))),
-      a.en_cours ? pastille("En cours", "bleu") : null),
+      a.en_cours ? pastille("En cours", "bleu") : a.occupe ? pastille("En cours hors de l'interface", "bleu") : null),
     a.site ? el("p", { classe: "site" }, a.site) : null,
     a.voyants.length
       ? el("dl", { classe: "voyants" }, a.voyants.flatMap((v) => [
@@ -321,7 +321,7 @@ function carteAudit(a, rang) {
     el("div", { classe: "pied actions" },
       a.synthese ? el("a", { classe: "bouton petit", href: `${base}synthese.html`, target: "_blank", rel: "noopener", "aria-label": `Ouvrir la synthèse ${de}` }, "Ouvrir la synthèse") : null,
       a.pdf ? el("a", { classe: "bouton petit", href: `${base}synthese.pdf?v=${encodeURIComponent(a.pdf_date || "")}`, target: "_blank", rel: "noopener", "aria-label": `Ouvrir le PDF ${de}` }, "Ouvrir le PDF") : null,
-      el("button", { type: "button", classe: "bouton petit", disabled: occupe, "aria-label": `Regénérer le PDF ${de}`, onclick: () => regenerer(a) }, "Regénérer le PDF"),
+      el("button", { type: "button", classe: "bouton petit", disabled: occupe || a.occupe, "aria-label": `Regénérer le PDF ${de}`, onclick: () => regenerer(a) }, "Regénérer le PDF"),
       el("button", { type: "button", classe: "bouton petit", "aria-label": `Ouvrir le dossier ${de}`, onclick: () => ouvrirDossier(a) }, "Ouvrir le dossier")));
 }
 

@@ -13,5 +13,7 @@
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 lire_arguments "$@"
 exiger "$CHROME_PATH"
+definir_dossier
+verrouiller_dossier
 preparer_sortie synthese
 "$PYTHON" -m synthese "$DOSSIER_AUDIT"
