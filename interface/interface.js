@@ -120,7 +120,10 @@ function annoncer(texte) {
 }
 
 // --- Onglets (motif ARIA « tabs » : flèches, Début, Fin) ---------------------------------------
-function afficherOnglet(nom, { focus = false } = {}) {
+// focus : « onglet » (navigation au clavier dans les onglets), « titre » (onglet changé par une
+// action : lancement, regénération, lien), ou sélecteur de l'élément à focaliser. Sans lui, le
+// focus resterait sur un bouton masqué avec son panneau et repartirait du haut de la page.
+function afficherOnglet(nom, { focus = null } = {}) {
   if (!ONGLETS.includes(nom)) nom = "nouvel";
   for (const n of ONGLETS) {
     const onglet = $(`#onglet-${n}`), actif = n === nom;
@@ -128,10 +131,19 @@ function afficherOnglet(nom, { focus = false } = {}) {
     onglet.tabIndex = actif ? 0 : -1;
     $(`#panneau-${n}`).hidden = !actif;
   }
-  if (focus) $(`#onglet-${nom}`).focus();
+  if (focus === "onglet") $(`#onglet-${nom}`).focus();
+  else if (focus === "titre") focaliserTitre(nom);
+  else if (focus) $(focus).focus();
   if (location.hash !== `#${nom}`) history.replaceState(null, "", `#${nom}`);
   if (nom === "audits") chargerAudits();
   if (nom === "installation" && !installationChargee) chargerInstallation();
+}
+
+function focaliserTitre(nom) {   // premier titre visible du panneau, focalisable par programme seulement
+  const titre = [...document.querySelectorAll(`#panneau-${nom} h2`)].find((h) => h.getClientRects().length);
+  if (!titre) return;
+  titre.tabIndex = -1;
+  titre.focus();
 }
 
 function clavierOnglets(evenement) {
@@ -139,7 +151,7 @@ function clavierOnglets(evenement) {
   const cible = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: ONGLETS.length - 1 }[evenement.key];
   if (i < 0 || cible === undefined) return;
   evenement.preventDefault();
-  afficherOnglet(ONGLETS[(cible + ONGLETS.length) % ONGLETS.length], { focus: true });
+  afficherOnglet(ONGLETS[(cible + ONGLETS.length) % ONGLETS.length], { focus: "onglet" });
 }
 
 // --- Nouvel audit ------------------------------------------------------------------------------
@@ -189,7 +201,7 @@ async function lancerAudit(evenement) {
   try {
     const t = await api("/api/audits", { url: url.value.trim(), outils: choisis, max: $("#max").value, voisins: $("#voisins").value });
     suivre(t);
-    afficherOnglet("suivi");
+    afficherOnglet("suivi", { focus: "titre" });
     annoncer("Audit lancé.");
   } catch (e) {
     signaler(e.message, /adresse/i.test(e.message) ? url : null);
@@ -396,7 +408,7 @@ function carteAudit(a, rang) {
 async function regenerer(a) {
   try {
     suivre(await api("/api/pdf", { domaine: a.domaine, date: a.date }));
-    afficherOnglet("suivi");
+    afficherOnglet("suivi", { focus: "titre" });
     annoncer("Regénération de la synthèse lancée.");
   } catch (e) {
     annoncer(e.message);
@@ -454,9 +466,9 @@ async function chargerInstallation(rafraichir = false) {
 async function demarrer() {
   for (const n of ONGLETS) $(`#onglet-${n}`).addEventListener("click", () => afficherOnglet(n));
   $(".onglets").addEventListener("keydown", clavierOnglets);
-  window.addEventListener("hashchange", () => {
+  window.addEventListener("hashchange", () => {   // liens #nouvel (suivi vide) et #suivi (indicateur)
     const nom = location.hash.slice(1);
-    if (ONGLETS.includes(nom)) afficherOnglet(nom);
+    if (ONGLETS.includes(nom)) afficherOnglet(nom, { focus: nom === "nouvel" ? "#url" : "titre" });
   });
   $("#formulaire").addEventListener("submit", lancerAudit);
   $("#liste-outils").addEventListener("change", compterOutils);
