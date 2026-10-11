@@ -579,10 +579,12 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 return self._ouvrir_session(params["jeton"][0])
             if not self._cookie_valide():
                 raise Refus(403, "Accès refusé : ouvrir l'interface avec bin/interface (l'adresse affichée contient le jeton).")
+            if api or methode == "POST":
+                self._verifier_origine()     # lectures comprises : image, flux ou fetch d'une autre page refusés
             if methode == "POST":
-                self._verifier_post()
+                self._verifier_jeton()
                 route = {"/api/audits": self._lancer_audit, "/api/arreter": self._arreter, "/api/pdf": self._regenerer_pdf,
-                         "/api/ouvrir-dossier": self._ouvrir_dossier}.get(chemin)
+                         "/api/ouvrir-dossier": self._ouvrir_dossier, "/api/etat": lambda _: self._etat(True)}.get(chemin)
                 if not route:
                     raise Refus(404, "Adresse inconnue.")
                 return self._json(200, route(self._corps_json()))
@@ -600,7 +602,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 "/api/outils": lambda: {"outils": self.server.outils, "psi_cle": cle_psi_configuree(), "resultats": str(RESULTATS)},
                 "/api/statut": lambda: {"travail": travail.resume() if travail else None},
                 "/api/audits": lambda: {"audits": lister_audits(self.server.libelles, travail), "resultats": str(RESULTATS)},
-                "/api/etat": lambda: self._etat("rafraichir" in params),
+                "/api/etat": lambda: self._etat(False),     # nouvelle vérification : POST /api/etat
             }
             if chemin not in reponses:
                 raise Refus(404, "Adresse inconnue.")
@@ -641,9 +643,13 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 return True
         return False
 
-    def _verifier_post(self):
+    def _verifier_jeton(self):
         if not secrets.compare_digest((self.headers.get("X-Jeton") or "").encode(), self.server.csrf.encode()):
             raise Refus(403, "En-tête X-Jeton absent ou invalide.")
+
+    def _verifier_origine(self):
+        """Origin, s'il est présent, doit être l'interface ; Sec-Fetch-Site (navigateurs récents) doit
+        dire « même origine » ou « navigation directe » : pas de requête lancée par une autre page."""
         origine = self.headers.get("Origin")
         if origine and origine.lower() not in {f"http://{h}" for h in self.server.hotes}:
             raise Refus(403, "Origine refusée.")

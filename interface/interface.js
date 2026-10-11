@@ -490,7 +490,7 @@ async function chargerInstallation(rafraichir = false) {
   bouton.disabled = true;
   zone.replaceChildren(el("div", { classe: "carte triple chargement" }, "Vérification de l'installation en cours (quelques secondes)…"));
   try {
-    const d = await api(`/api/etat${rafraichir ? "?rafraichir=1" : ""}`), nav = d.navigateur, ok = d.verification.code === 0;
+    const d = await api("/api/etat", rafraichir ? {} : undefined), nav = d.navigateur, ok = d.verification.code === 0;
     zone.replaceChildren(
       carte("Navigateur", "", pastille(nav.executable ? "Trouvé" : "Introuvable", nav.executable ? "vert" : "rouge"),
         el("p", { classe: "valeur" }, nav.version || "version inconnue"), el("p", { classe: "chemin" }, nav.chemin)),
