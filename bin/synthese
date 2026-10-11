@@ -9,11 +9,13 @@
 # Usage : bin/synthese URL [--dossier DOSSIER]
 #   (le dossier d'audit par défaut est celui du jour : resultats/<domaine>/<AAAA-MM-JJ>)
 #
-# Sortie : synthese/synthese.html et synthese/synthese.pdf
+# Sortie : synthese/synthese.html, synthese/synthese.pdf et synthese/voyants.json ; en cas d'échec,
+# la synthèse précédente est gardée telle quelle.
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 lire_arguments "$@"
 exiger "$CHROME_PATH"
 definir_dossier
 verrouiller_dossier
-preparer_sortie synthese
-"$PYTHON" -m synthese "$DOSSIER_AUDIT"
+[ -s "$DOSSIER_AUDIT/site.txt" ] || echo "$SITE_URL" > "$DOSSIER_AUDIT/site.txt"
+journal "synthese : $SITE_URL → $DOSSIER_AUDIT/synthese"
+"$PYTHON" -m synthese "$DOSSIER_AUDIT"      # synthese/ n'est remplacé que si le PDF est produit

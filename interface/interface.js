@@ -192,8 +192,10 @@ function statutTravail(t) {   // [libellé, couleur] du statut global, calculé 
 function messageFin(t) {
   const echecs = t.echecs || [];
   if (t.genre === "pdf") {
-    return { termine: "Synthèse regénérée.", arrete: "Regénération arrêtée." }[t.statut]
-      || `Échec de la regénération (code ${t.code}) : voir le journal.`;
+    if (t.statut === "termine") return "Synthèse regénérée.";
+    if (t.statut === "arrete") return "Regénération arrêtée.";
+    return t.pdf ? "Échec de la regénération : la synthèse précédente est conservée."
+      : `Échec de la regénération (code ${t.code}) : voir le journal.`;
   }
   return {
     termine: "Audit terminé.", arrete: "Audit arrêté.",
@@ -314,14 +316,14 @@ function carteAudit(a, rang) {
     a.voyants.length
       ? el("dl", { classe: "voyants" }, a.voyants.flatMap((v) => [
         el("dt", {}, v.domaine), el("dd", {}, pastille(v.etat, COULEURS.includes(v.couleur) ? v.couleur : "gris"))]))
-      : el("p", { classe: "aide" }, "Voyants indisponibles : regénérer le PDF pour les calculer."),
+      : el("p", { classe: "aide" }, "Voyants indisponibles : regénérer la synthèse pour les calculer."),
     a.chiffres.length ? el("div", { classe: "chiffres" }, a.chiffres.slice(0, 4).map((c) =>
       el("div", { classe: "chiffre" }, el("div", { classe: "val" }, c.valeur), el("div", { classe: "lib" }, c.libelle)))) : null,
     el("p", { classe: "resultat-outils" }, resumeOutils(a)),
     el("div", { classe: "pied actions" },
       a.synthese ? el("a", { classe: "bouton petit", href: `${base}synthese.html`, target: "_blank", rel: "noopener", "aria-label": `Ouvrir la synthèse ${de}` }, "Ouvrir la synthèse") : null,
       a.pdf ? el("a", { classe: "bouton petit", href: `${base}synthese.pdf?v=${encodeURIComponent(a.pdf_date || "")}`, target: "_blank", rel: "noopener", "aria-label": `Ouvrir le PDF ${de}` }, "Ouvrir le PDF") : null,
-      el("button", { type: "button", classe: "bouton petit", disabled: occupe || a.occupe, "aria-label": `Regénérer le PDF ${de}`, onclick: () => regenerer(a) }, "Regénérer le PDF"),
+      el("button", { type: "button", classe: "bouton petit", disabled: occupe || a.occupe, "aria-label": `Regénérer la synthèse ${de}`, onclick: () => regenerer(a) }, "Regénérer la synthèse"),
       el("button", { type: "button", classe: "bouton petit", "aria-label": `Ouvrir le dossier ${de}`, onclick: () => ouvrirDossier(a) }, "Ouvrir le dossier")));
 }
 
