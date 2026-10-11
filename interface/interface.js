@@ -37,6 +37,15 @@ function el(balise, attributs = {}, ...enfants) {
 }
 
 const pastille = (texte, couleur) => el("span", { classe: `pastille ${couleur}` }, texte);
+
+// Mises à jour en place (texte et classe changés seulement s'il le faut, nœuds gardés) : un lecteur
+// d'écran garde sa position dans le suivi, rafraîchi chaque seconde.
+function changer(noeud, texte) {
+  if (noeud.textContent === texte) return;
+  if (noeud.childNodes.length === 1 && noeud.firstChild.nodeType === Node.TEXT_NODE) noeud.firstChild.data = texte;
+  else noeud.textContent = texte;
+}
+const classer = (noeud, classe) => { if (noeud.className !== classe) noeud.className = classe; };
 const cheminUrl = (chemin) => chemin.split("/").map(encodeURIComponent).join("/");
 const formatJour = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 const formatHeure = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -110,6 +119,12 @@ async function retablir() {
   } catch { /* nouvelle coupure : déjà signalée */ }
 }
 
+function annoncerLecteur(texte) {   // résumé pour les lecteurs d'écran seulement (région masquée)
+  const zone = $("#annonce-lecteur");
+  zone.textContent = "";
+  setTimeout(() => { zone.textContent = texte; }, 50);   // même texte deux fois de suite : relu quand même
+}
+
 let minuterieAnnonce;
 function annoncer(texte) {
   const zone = $("#annonce");
@@ -135,7 +150,7 @@ function afficherOnglet(nom, { focus = null } = {}) {
   else if (focus === "titre") focaliserTitre(nom);
   else if (focus) $(focus).focus();
   if (location.hash !== `#${nom}`) history.replaceState(null, "", `#${nom}`);
-  if (nom === "audits") chargerAudits();
+  if (nom === "audits") chargerAudits({ annonce: true });
   if (nom === "installation" && !installationChargee) chargerInstallation();
 }
 
@@ -281,24 +296,25 @@ function afficherTravail(t) {
   const maintenant = Date.now() / 1000, actif = t.statut === "en_cours" && !coupe;
   $("#suivi-vide").hidden = true;
   $("#suivi").hidden = false;
-  $("#suivi-genre").textContent = t.genre === "pdf" ? "Regénération de la synthèse" : "Audit complet";
-  $("#suivi-site").textContent = t.site;
+  changer($("#suivi-genre"), t.genre === "pdf" ? "Regénération de la synthèse" : "Audit complet");
+  changer($("#suivi-site"), t.site);
   const temps = coupe ? "état inconnu depuis la perte de connexion" : actif ? `en cours depuis ${duree(maintenant - t.debut)}`
     : `terminé à ${formatHeure.format(new Date(t.fin * 1000))}, durée ${duree(t.fin - t.debut)}`;
-  $("#suivi-meta").textContent = `Commencé à ${formatHeure.format(new Date(t.debut * 1000))}, ${temps}. Résultats : ${t.chemin || t.dossier}`;
+  changer($("#suivi-meta"), `Commencé à ${formatHeure.format(new Date(t.debut * 1000))}, ${temps}. Résultats : ${t.chemin || t.dossier}`);
   $("#suivi-meta").title = t.dossier;
   const [libelle, couleur] = coupe ? ["Connexion perdue", "gris"] : statutTravail(t);
-  $("#suivi-statut").replaceWith(el("span", { id: "suivi-statut", classe: `pastille ${couleur}` }, libelle));
-  $("#suivi-outils").replaceChildren(...t.outils.map((o) => {
-    const inconnu = coupe && o.etat === "en_cours";
+  classer($("#suivi-statut"), `pastille ${couleur}`);
+  changer($("#suivi-statut"), libelle);
+  const liste = etapesSuivi(t);
+  t.outils.forEach((o, i) => {
+    const li = liste.children[i], inconnu = coupe && o.etat === "en_cours";
     const [lib, coul] = inconnu ? ["État inconnu", "gris"] : !actif && !coupe && o.etat === "attente" ? ["Non lancé", "gris"]
       : ETATS[o.etat] || [o.etat, "gris"];
-    return el("li", { classe: `etape ${inconnu ? "inconnu" : o.etat}` },
-      el("span", { classe: "nom" }, o.libelle),
-      el("span", { classe: "droite" },
-        el("span", { classe: "duree" }, o.etat === "en_cours" ? (coupe ? "" : duree(maintenant - o.debut)) : duree(o.duree)),
-        pastille(lib, coul)));
-  }));
+    classer(li, `etape ${inconnu ? "inconnu" : o.etat}`);
+    changer(li.querySelector(".duree"), o.etat === "en_cours" ? (coupe ? "" : duree(maintenant - o.debut)) : duree(o.duree));
+    classer(li.querySelector(".pastille"), `pastille ${coul}`);
+    changer(li.querySelector(".pastille"), lib);
+  });
   $("#arreter").hidden = !actif;
   // Liens vers la synthèse de ce travail ; après un arrêt ou un échec, celle d'un passage précédent
   // est proposée sous un libellé qui le dit, avec sa date.
@@ -309,13 +325,25 @@ function afficherTravail(t) {
     ["#suivi-pdf", "synthese.pdf", t.pdf, "Ouvrir le PDF", "PDF précédent"]]) {
     const lien = $(id);
     lien.hidden = actif || coupe || !base || !present;
-    lien.textContent = t.produite ? lib : `${libAncien}${avant}`;
+    changer(lien, t.produite ? lib : `${libAncien}${avant}`);
     if (base) lien.href = `${base}${fichier}?v=${Math.round(t.fin || 0)}`;
   }
   const hote = (() => { try { return new URL(t.site).host; } catch { return t.site; } })();
   $("#indicateur").hidden = !actif;
-  $("#indicateur-texte").textContent = t.genre === "pdf" ? `Synthèse en cours : ${hote}` : `Audit en cours : ${hote}`;
-  document.title = coupe ? "Connexion perdue — Kit d'audit web" : actif ? `● ${hote} — Kit d'audit web` : "Kit d'audit web";
+  changer($("#indicateur-texte"), t.genre === "pdf" ? `Synthèse en cours : ${hote}` : `Audit en cours : ${hote}`);
+  const titre = coupe ? "Connexion perdue — Kit d'audit web" : actif ? `● ${hote} — Kit d'audit web` : "Kit d'audit web";
+  if (document.title !== titre) document.title = titre;
+}
+
+function etapesSuivi(t) {   // liste des outils créée une fois par travail, mise à jour en place ensuite
+  const liste = $("#suivi-outils"), cle = `${t.id}:${t.outils.map((o) => o.nom).join(",")}`;
+  if (liste.dataset.cle !== cle) {
+    liste.dataset.cle = cle;
+    liste.replaceChildren(...t.outils.map((o) => el("li", { classe: "etape" },
+      el("span", { classe: "nom" }, o.libelle),
+      el("span", { classe: "droite" }, el("span", { classe: "duree" }, ""), el("span", { classe: "pastille" }, "")))));
+  }
+  return liste;
 }
 
 function ajouterLigne(texte) {
@@ -347,7 +375,7 @@ async function arreter() {
 }
 
 // --- Audits passés -----------------------------------------------------------------------------
-async function chargerAudits() {
+async function chargerAudits({ annonce = false } = {}) {
   const zone = $("#liste-audits");
   if (!audits.length) zone.replaceChildren(el("p", { classe: "chargement" }, "Chargement des audits…"));
   try {
@@ -355,20 +383,46 @@ async function chargerAudits() {
     audits = d.audits;
     $("#audits-racine").textContent = `Dossier des résultats : ${d.resultats}`;
     rendreAudits();
+    if (annonce) annoncerLecteur(resumeFiltre());
   } catch (e) {
     zone.replaceChildren(el("p", { classe: "message erreur" }, e.message));
+    if (annonce) annoncerLecteur(e.message);
   }
 }
 
-function rendreAudits() {
-  const zone = $("#liste-audits"), filtre = $("#filtre").value.trim().toLowerCase();
-  const liste = audits.filter((a) => !filtre || a.domaine.toLowerCase().includes(filtre) || a.site.toLowerCase().includes(filtre));
-  if (!liste.length) {
-    zone.replaceChildren(el("div", { classe: "carte vide" }, audits.length ? "Aucun audit ne correspond au filtre."
-      : "Aucun audit pour l'instant : lancez-en un depuis l'onglet « Nouvel audit »."));
+function rendreAudits() {   // cartes recréées à chaque chargement ; le filtre ne fait que les masquer
+  const zone = $("#liste-audits");
+  if (!audits.length) {
+    zone.replaceChildren(el("div", { classe: "carte vide" }, "Aucun audit pour l'instant : lancez-en un depuis l'onglet « Nouvel audit »."));
     return;
   }
-  zone.replaceChildren(...liste.map(carteAudit));
+  zone.replaceChildren(...audits.map(carteAudit), el("div", { id: "aucun-audit", classe: "carte vide", hidden: true }, "Aucun audit ne correspond au filtre."));
+  filtrerAudits();
+}
+
+function filtrerAudits() {
+  const filtre = $("#filtre").value.trim().toLowerCase();
+  let n = 0;
+  document.querySelectorAll("#liste-audits .carte.audit").forEach((carte, i) => {
+    const a = audits[i], visible = !filtre || a.domaine.toLowerCase().includes(filtre) || a.site.toLowerCase().includes(filtre);
+    carte.hidden = !visible;
+    n += visible;
+  });
+  const vide = $("#aucun-audit");
+  if (vide) vide.hidden = n > 0;
+  return n;
+}
+
+function resumeFiltre() {
+  const n = audits.length ? document.querySelectorAll("#liste-audits .carte.audit:not([hidden])").length : 0;
+  return n ? `${pluriel(n, "audit")} affiché${n > 1 ? "s" : ""}.` : audits.length ? "Aucun audit ne correspond au filtre." : "Aucun audit pour l'instant.";
+}
+
+let minuterieFiltre;
+function saisieFiltre() {   // masquage immédiat, résumé lu une fois la frappe terminée
+  filtrerAudits();
+  clearTimeout(minuterieFiltre);
+  minuterieFiltre = setTimeout(() => annoncerLecteur(resumeFiltre()), 700);
 }
 
 function resumeOutils(a) {
@@ -454,8 +508,10 @@ async function chargerInstallation(rafraichir = false) {
           pastille(ok ? "Tout est prêt" : "Prérequis manquants", ok ? "vert" : "rouge")),
         el("pre", { classe: "sortie", tabindex: "0", "aria-label": "Résultat de installer.sh --verifier" }, d.verification.sortie),
         el("p", { classe: "aide" }, "Résultat de « ./installer.sh --verifier ». Pour installer ce qui manque : « ./installer.sh » dans un terminal.")));
+    annoncerLecteur(`Vérification terminée : ${ok ? "tout est prêt" : "prérequis manquants"}.`);
   } catch (e) {
     zone.replaceChildren(el("p", { classe: "message erreur" }, e.message));
+    annoncerLecteur(e.message);
   } finally {
     zone.setAttribute("aria-busy", "false");
     bouton.disabled = false;
@@ -479,8 +535,8 @@ async function demarrer() {
   journal.addEventListener("scroll", () => {
     $("#suivre-fin").checked = journal.scrollHeight - journal.scrollTop - journal.clientHeight < 40;
   });
-  $("#filtre").addEventListener("input", rendreAudits);
-  $("#actualiser-audits").addEventListener("click", chargerAudits);
+  $("#filtre").addEventListener("input", saisieFiltre);
+  $("#actualiser-audits").addEventListener("click", () => chargerAudits({ annonce: true }));
   $("#actualiser-installation").addEventListener("click", () => chargerInstallation(true));
 
   chargerOutils();
