@@ -212,9 +212,17 @@ class Travail:
                 fin_normale = code == 0 and not self.arret_demande
                 self._terminer_courant("interrompu" if self.arret_demande else "reussi" if fin_normale else "echec")
             self.code, self.fin = code, time.time()
-            self.statut = "arrete" if self.arret_demande else "termine" if code == 0 else "echec"
+            self.statut = "arrete" if self.arret_demande else self._statut_final(code)
             self.version += 1
             self.cond.notify_all()
+
+    def _statut_final(self, code):
+        """bin/tout finit toujours par « journal | tee » (code 0) : le bilan vient des états des outils.
+        Échec si la synthèse n'a pas produit son PDF ; « termine_echecs » si un outil a échoué."""
+        if code != 0 or self.etats.get("synthese", {}).get("etat") != "reussi" \
+                or not (self.dossier / "synthese/synthese.pdf").is_file():
+            return "echec"
+        return "termine_echecs" if any(e["etat"] == "echec" for e in self.etats.values()) else "termine"
 
     def ajouter(self, ligne):
         with self.cond:
@@ -311,6 +319,7 @@ class Travail:
                 "id": self.id, "genre": self.genre, "site": self.site, "dossier": str(self.dossier), "chemin": chemin,
                 "statut": self.statut, "code": self.code, "debut": self.debut, "fin": self.fin, "lignes": self.decalage + len(self.lignes),
                 "outils": [{"nom": n, "libelle": self.libelles.get(n, n), **e} for n, e in self.etats.items()],
+                "echecs": [self.libelles.get(n, n) for n, e in self.etats.items() if e["etat"] == "echec" and n != "synthese"],
                 "synthese": (synthese / "synthese.html").is_file(), "pdf": (synthese / "synthese.pdf").is_file(),
             }
 

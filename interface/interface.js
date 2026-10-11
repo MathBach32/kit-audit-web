@@ -13,7 +13,10 @@ const ETATS = {   // état d'un outil → [libellé, couleur de pastille]
   attente: ["En attente", "gris"], en_cours: ["En cours", "bleu"], reussi: ["Réussi", "vert"],
   echec: ["Échec", "rouge"], interrompu: ["Interrompu", "orange"],
 };
-const STATUTS = { en_cours: ["En cours", "bleu"], termine: ["Terminé", "vert"], echec: ["Échec", "rouge"], arrete: ["Arrêté", "orange"] };
+const STATUTS = {
+  en_cours: ["En cours", "bleu"], termine: ["Terminé", "vert"], termine_echecs: ["Terminé avec des échecs", "orange"],
+  echec: ["Échec", "rouge"], arrete: ["Arrêté", "orange"],
+};
 const COULEURS = ["vert", "orange", "rouge", "gris"];   // voyants de la synthèse
 const $ = (selecteur) => document.querySelector(selecteur);
 const journal = $("#journal");
@@ -177,9 +180,30 @@ function fermerFlux() {
   flux = null;
 }
 
+const pluriel = (n, mot) => `${n}\u00a0${mot}${n > 1 ? "s" : ""}`;
+
+function statutTravail(t) {   // [libellé, couleur] du statut global, calculé par le serveur à partir des outils
+  const echecs = t.echecs || [];
+  if (t.statut === "termine_echecs") return [`Terminé avec ${pluriel(echecs.length, "échec")}`, "orange"];
+  if (t.statut === "echec" && t.genre === "audit" && t.code === 0) return ["Échec : synthèse non produite", "rouge"];
+  return STATUTS[t.statut] || [t.statut, "gris"];
+}
+
+function messageFin(t) {
+  const echecs = t.echecs || [];
+  if (t.genre === "pdf") {
+    return { termine: "Synthèse regénérée.", arrete: "Regénération arrêtée." }[t.statut]
+      || `Échec de la regénération (code ${t.code}) : voir le journal.`;
+  }
+  return {
+    termine: "Audit terminé.", arrete: "Audit arrêté.",
+    termine_echecs: `Audit terminé avec ${pluriel(echecs.length, "échec")} : ${echecs.join(", ")}.`,
+    echec: t.code === 0 ? "Échec : synthèse non produite (voir le journal)." : `Échec de l'audit (code ${t.code}) : voir le journal.`,
+  }[t.statut] || "Audit terminé.";
+}
+
 function terminer(t) {
-  const quoi = t.genre === "pdf" ? "Synthèse regénérée" : "Audit terminé";
-  annoncer({ termine: `${quoi}.`, arrete: "Audit arrêté.", echec: `${quoi} avec une erreur (code ${t.code}).` }[t.statut] || quoi);
+  annoncer(messageFin(t));
   audits = [];
   if (!$("#panneau-audits").hidden) chargerAudits();
 }
@@ -196,7 +220,7 @@ function afficherTravail(t) {
     : `terminé à ${formatHeure.format(new Date(t.fin * 1000))}, durée ${duree(t.fin - t.debut)}`;
   $("#suivi-meta").textContent = `Commencé à ${formatHeure.format(new Date(t.debut * 1000))}, ${temps}. Résultats : ${t.chemin || t.dossier}`;
   $("#suivi-meta").title = t.dossier;
-  const [libelle, couleur] = STATUTS[t.statut] || [t.statut, "gris"];
+  const [libelle, couleur] = statutTravail(t);
   $("#suivi-statut").replaceWith(el("span", { id: "suivi-statut", classe: `pastille ${couleur}` }, libelle));
   $("#suivi-outils").replaceChildren(...t.outils.map((o) => {
     const [lib, coul] = !actif && o.etat === "attente" ? ["Non lancé", "gris"] : ETATS[o.etat] || [o.etat, "gris"];

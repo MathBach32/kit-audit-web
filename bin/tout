@@ -53,6 +53,7 @@ lancer() {
   journal "=== $cmd" 2>&1 | tee -a "$JOURNAL" >&2
   "$KIT_RACINE/bin/$cmd" "$SITE_URL" "$@" 2>&1 | tee -a "$JOURNAL"
   local code=${PIPESTATUS[0]}
+  DERNIER_CODE=$code
   printf '%s\t%s\t%s\n' "$cmd" "$code" "$((SECONDS - debut))" >> "$ETATS"
   [ "$code" -eq 0 ] || journal "$cmd a échoué (code $code) ; on continue" 2>&1 | tee -a "$JOURNAL" >&2
 }
@@ -99,4 +100,8 @@ manifeste = {"site": sys.argv[2], "dossier": str(d), "outils": outils, "versions
 PY
 lancer synthese
 rm -f "$ETATS"
-journal "terminé : $DOSSIER_AUDIT/synthese/synthese.pdf" 2>&1 | tee -a "$JOURNAL" >&2
+if [ "$DERNIER_CODE" -eq 0 ]; then
+  journal "terminé : $DOSSIER_AUDIT/synthese/synthese.pdf" 2>&1 | tee -a "$JOURNAL" >&2
+else
+  journal "terminé sans nouvelle synthèse (échec de bin/synthese) : résultats dans $DOSSIER_AUDIT" 2>&1 | tee -a "$JOURNAL" >&2
+fi
