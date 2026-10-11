@@ -57,6 +57,8 @@ SECRETS = Path(os.environ.get("KIT_AUDIT_SECRETS") or Path.home() / ".config/aud
 CHROME = os.environ.get("CHROME_PATH", "/usr/bin/google-chrome")
 PROFIL = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "kit-audit-web/interface"
 PORTS_ESSAYES = 20
+CONNEXIONS_MAX = 64         # connexions traitées en même temps ; au-delà, fermées aussitôt
+DELAI_SOCKET = 30           # secondes sans échange avant fermeture (le flux SSE écrit toutes les 15 s)
 LIGNES_MAX = 20000          # lignes de journal gardées en mémoire (les plus anciennes sont oubliées)
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 HOTE = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$", re.I)
@@ -519,12 +521,36 @@ class Serveur(ThreadingHTTPServer):
         self.cookie = f"kit_audit_session_{port}"   # les cookies ne distinguent pas les ports
         self.hotes = {f"{adresse}:{port}"}
         self.jetons_uniques, self.verrou_jetons = set(), threading.Lock()
+        self.places = threading.BoundedSemaphore(CONNEXIONS_MAX)
         self.outils = liste_outils()
         self.libelles = {o["nom"]: o["libelle"] for o in self.outils} | {"synthese": "Synthèse"}
         self.travail = None
         self.verrou = threading.Lock()
         self.verrou_etat = threading.Lock()
         self.installation = None
+
+    # Un fil par connexion, mais pas plus de CONNEXIONS_MAX : des connexions laissées ouvertes par un
+    # autre processus local ne doivent pas accumuler les fils du compte.
+    def process_request(self, request, client_address):
+        if not self.places.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self.places.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.places.release()
+
+    def handle_error(self, request, client_address):
+        """Client parti ou muet : rien à afficher ; les autres erreurs gardent leur trace."""
+        if not isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError, TimeoutError)):
+            super().handle_error(request, client_address)
 
     def adresse_ouverture(self, unique=False):
         """Adresse à jeton. unique=True : jeton à usage unique, pour la fenêtre du navigateur, dont la
@@ -556,6 +582,7 @@ class Serveur(ThreadingHTTPServer):
 class Gestionnaire(BaseHTTPRequestHandler):
     server_version = "kit-audit-web"
     sys_version = ""
+    timeout = DELAI_SOCKET
 
     def log_message(self, format, *args):  # noqa: A002 — pas de journal des requêtes : l'adresse d'ouverture contient le jeton
         pass
@@ -613,7 +640,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
             else:
                 corps = f'<!doctype html><html lang="fr"><meta charset="utf-8"><title>Kit d\'audit web</title><p>{e.message}</p>'
                 self._envoyer(e.code, corps.encode(), "text/html; charset=utf-8")
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, TimeoutError):
             pass
         except Exception:  # noqa: BLE001 — une erreur imprévue ne doit pas arrêter le serveur
             traceback.print_exc()
