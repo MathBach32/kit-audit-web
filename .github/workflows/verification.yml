@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
+# Vérification de bout en bout du kit. Toute la logique est dans les scripts du dépôt
+# (installer.sh, tests/verifier.sh, seonaut/*.sh) : ce fichier n'en est qu'une enveloppe, facile à
+# transposer dans une autre forge (GitLab CI, Forgejo Actions).
+name: Vérification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "37 4 * * 1"   # chaque lundi : casse venue d'ailleurs (nouveau Chrome, système, sites tiers)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kit:
+    name: kit (${{ matrix.navigateur }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        navigateur: [chrome, chromium]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - name: Outils du système
+        run: sudo apt-get update -q && sudo apt-get install -yq bind9-dnsutils poppler-utils fonts-noto-core
+      - name: Navigateur
+        run: tests/navigateur-ci.sh "${{ matrix.navigateur }}" >> "$GITHUB_ENV"
+      - name: Installation du kit
+        run: ./installer.sh
+      - name: Vérification de bout en bout
+        run: tests/verifier.sh --garder
+      - name: Résultats en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: audit-${{ matrix.navigateur }}
+          path: /tmp/kit-verif.*
+          retention-days: 7
+
+  seonaut:
+    name: seonaut
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Construction de l'image (amd64)
+        run: seonaut/construire-image.sh linux/amd64
+      - name: Démarrage avec les garde-fous, puis arrêt
+        working-directory: seonaut
+        run: |
+          ./initialiser.sh
+          ./demarrer.sh
+          curl -sSf -o /dev/null "http://127.0.0.1:9100/robots.txt"
+          ./arreter.sh

@@ -63,7 +63,7 @@ LIGNES_MAX = 20000          # lignes de journal gardées en mémoire (les plus a
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 HOTE = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$", re.I)
 JOUR = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-ALIAS = {"sf": "sf-crawl"}  # nom d'outil dans manifeste.json → nom de la commande
+ANCIENS = {"sf": "Screaming Frog (audit antérieur)"}  # outils retirés, présents dans d'anciens manifestes
 CSP_PAGE = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; "
             "base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 CSP_RESULTAT = ("default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; "
@@ -423,7 +423,7 @@ def decrire_audit(d, libelles, travail):
     m = lire_json(d / "manifeste.json") or {}
     v = lire_json(d / "synthese/voyants.json") or {}
     outils = [o for o in m.get("outils", []) if isinstance(o, dict) and "outil" in o]
-    nommer = lambda o: {"nom": o["outil"], "libelle": libelles.get(ALIAS.get(o["outil"], o["outil"]), o["outil"])}  # noqa: E731
+    nommer = lambda o: {"nom": o["outil"], "libelle": libelles.get(o["outil"]) or ANCIENS.get(o["outil"], o["outil"])}  # noqa: E731
     pdf, page, manifeste = d / "synthese/synthese.pdf", d / "synthese/synthese.html", d / "manifeste.json"
     try:
         site = (d / "site.txt").read_text(encoding="utf-8").strip()

@@ -20,6 +20,9 @@ export PATH="$KIT_RACINE/node_modules/.bin:$KIT_RACINE/.venv/bin:$HOME/.local/bi
 export CHROME_PATH="${CHROME_PATH:-/usr/bin/google-chrome}"
 export PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-$CHROME_PATH}"
 export PUPPETEER_SKIP_DOWNLOAD=1
+# Chrome crée un socket Unix dans TMPDIR : au-delà d'environ 60 caractères, le chemin dépasse la
+# limite du système (108) et Chrome s'arrête aussitôt (SIGABRT). On se rabat alors sur /tmp.
+[ -z "${TMPDIR:-}" ] || [ "${#TMPDIR}" -le 60 ] || export TMPDIR=/tmp
 export KIT_UA="${KIT_UA:-Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0 Safari/537.36 kit-audit-web}"
 export PYTHONPATH="$KIT_RACINE/lib${PYTHONPATH:+:$PYTHONPATH}"
 PYTHON="$KIT_RACINE/.venv/bin/python"
@@ -101,8 +104,9 @@ urls_sitemap() {
 }
 
 # pages_a_auditer : écrit $SORTIE/pages.txt et renvoie son chemin. Par ordre de préférence :
-# --pages, pages HTML connues de Screaming Frog, du crawl advertools, du sitemap, sinon l'accueil.
-# --max N limite le nombre de pages.
+# --pages, pages HTML trouvées par bin/seo (liens et sitemap, l'accueil d'abord), la liste
+# urls_html_advertools.txt des dossiers produits par une version antérieure du kit, le sitemap,
+# sinon l'accueil. --max N limite le nombre de pages (les moins profondes d'abord).
 pages_a_auditer() {
   local f source=""
   for f in "${OPTS[--pages]:-}" "$DOSSIER_AUDIT/urls_html.txt" "$DOSSIER_AUDIT/urls_html_advertools.txt" "$(urls_sitemap)"; do

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr> -->
+<!-- SPDX-License-Identifier: EUPL-1.2 -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>{{base}}/</loc></url>
+<url><loc>{{base}}/contact.html</loc></url>
+<url><loc>{{base}}/actualites.html</loc></url>
+<url><loc>{{base}}/a-propos/</loc></url>
+<url><loc>{{base}}/presque.html</loc></url>
+<url><loc>{{base}}/mentions.html</loc></url>
+<url><loc>{{base}}/orpheline.html</loc></url>
+<url><loc>{{base}}/orpheline2.html</loc></url>
+<url><loc>{{base}}/cgu.html?replytocom=12</loc></url>
+<url><loc>{{base}}/ancienne-page</loc></url>
+<url><loc>{{base}}/supprimee.html</loc></url>
+<url><loc>{{base}}/lente.html</loc></url>
+<url><loc>{{base}}/canonique-cassee.html</loc></url>
+<url><loc>{{base}}/x-robots.html</loc></url>
+<url><loc>{{base}}/profond/1.html</loc></url>
+<url><loc>{{base}}/profond/2.html</loc></url>
+<url><loc>{{base}}/profond/3.html</loc></url>
+<url><loc>{{base}}/profond/4.html</loc></url>
+<url><loc>{{base}}/404-deguisee.html</loc></url>
+</urlset>
