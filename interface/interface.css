@@ -170,7 +170,9 @@ legend { padding: 0; }
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px;
   padding: 8px 16px; font: inherit; font-weight: 650; line-height: 1.2; text-decoration: none; cursor: pointer;
   color: var(--encre); background: var(--surface); border: 1px solid var(--bord-champ); border-radius: 9px;
+  overflow-wrap: normal;   /* body coupe n'importe où : un libellé de bouton ne se coupe qu'entre deux mots */
 }
+.barre-outils .bouton { flex: none; white-space: nowrap; }
 .bouton:hover { background: var(--surface-2); border-color: var(--encre-3); }
 .bouton.principal { color: #fff; background: var(--accent-plein); border-color: var(--accent-plein); }
 .bouton.principal:hover { background: var(--accent-fonce); border-color: var(--accent-fonce); }
@@ -295,6 +297,7 @@ button.lien {
   .pied .bouton { flex: 1 1 auto; }
   .barre-outils { width: 100%; }
   .barre-outils input[type="search"] { flex: 1 1 auto; width: auto; min-width: 0; }
+  .annonce { top: 12px; bottom: auto; width: calc(100% - 32px); text-align: center; }   /* en bas, elle masquait les boutons des cartes */
   .journal { max-height: 360px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {

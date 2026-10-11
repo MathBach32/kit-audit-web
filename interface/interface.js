@@ -471,8 +471,8 @@ async function regenerer(a) {
 
 async function ouvrirDossier(a) {
   try {
-    const d = await api("/api/ouvrir-dossier", { domaine: a.domaine, date: a.date });
-    annoncer(`Dossier ouvert : ${d.dossier}`);
+    await api("/api/ouvrir-dossier", { domaine: a.domaine, date: a.date });
+    annoncer(`Dossier ouvert : ${a.chemin}`);   // chemin court ; le chemin complet est en tête de l'onglet
   } catch (e) {
     annoncer(e.message);
   }
