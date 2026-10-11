@@ -36,7 +36,7 @@ SOFTWARE.
 
 ## Métriques de police — `config/largeurs_arial.json`
 
-Largeurs de caractères mesurées sur la police Liberation Sans (licence SIL Open Font License 1.1),
+Largeurs de caractères lues dans la police Liberation Sans 2.1.5 (licence SIL Open Font License 1.1),
 dont les métriques sont celles d'Arial ; elles servent à estimer la largeur affichée des title et
 descriptions dans les résultats de recherche. Le fichier ne contient que ces mesures, pas la police.
 

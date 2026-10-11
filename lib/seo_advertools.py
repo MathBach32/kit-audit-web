@@ -28,6 +28,7 @@ from pathlib import Path
 import advertools as adv
 import numpy as np
 import pandas as pd
+from w3lib.url import canonicalize_url
 
 from entetes_resume import SECURITE
 from kit import UA, est_page, largeur_px, lire_catalogue, lire_liste, meme_site, recuperer
@@ -49,6 +50,9 @@ SOFT_404 = re.compile(r"\berreur\s*404\b|^\W*404\b|\bpage\s+(est\s+)?(introuvabl
 XPATH = {
     "meta_robots": "//meta[translate(@name,'ROBTS','robts')='robots']/@content",
     "meta_refresh": "//meta[translate(@http-equiv,'REFSH','refsh')='refresh']/@content",
+    # canonical et meta_desc d'advertools sont sensibles à la casse (rel="Canonical", name="Description")
+    "canonique": "//link[translate(@rel,'CANOIL','canoil')='canonical']/@href",
+    "description": "//meta[translate(@name,'DESCRIPTON','descripton')='description']/@content",
     "titres_avant_h2": "count((//h2)[1]/preceding::*[self::h3 or self::h4 or self::h5 or self::h6])",
     "liens_sans_texte": "count(//a[@href][not(normalize-space(string(.)))][not(.//img[normalize-space(@alt)])]"
                         "[not(normalize-space(@aria-label))][not(normalize-space(@title))])",
@@ -62,8 +66,9 @@ XPATH = {
 
 
 def normaliser(u):
-    p = urllib.parse.urlsplit(str(u).strip())
-    return urllib.parse.urlunsplit((p.scheme, p.netloc.lower(), p.path or "/", p.query, ""))
+    """Clé de comparaison des adresses, celle de Scrapy : échappements uniformisés (é, %c3%a9 et
+    %C3%A9 ; virgule et %2C), paramètres triés, sans fragment, chemin « / » par défaut."""
+    return canonicalize_url(str(u).strip())
 
 
 def morceaux(v):
@@ -109,6 +114,14 @@ def domaines_autorises(url):
     return sorted({hote, racine, "www." + racine})
 
 
+def hotes_du_site(url):
+    """Expression des liens à suivre : l'hôte avec ou sans www (Scrapy admet aussi tous les
+    sous-domaines des domaines autorisés : blog., boutique.…, qui sont d'autres sites)."""
+    hote = urllib.parse.urlsplit(url).hostname or ""
+    racine = hote[4:] if hote.startswith("www.") else hote
+    return r"(?i)^https?://(?:www\.)?" + re.escape(racine) + r"(?::\d+)?(?:[/?#]|$)"
+
+
 def exclusions():
     """Expression des adresses à ne pas traiter comme des pages (config/exclusions_pages.txt)."""
     return "|".join(lire_liste(RACINE / "config/exclusions_pages.txt"))
@@ -126,7 +139,9 @@ def cible_refresh(contenu, page):
 
 def crawler(urls, sortie, dossier, max_pages, suivre):
     sortie.unlink(missing_ok=True)
-    adv.crawl(urls, str(sortie), follow_links=suivre, allowed_domains=domaines_autorises(urls[0]),
+    # advertools passe les adresses à Scrapy jointes par des virgules puis les redécoupe : encoder les virgules
+    adv.crawl([u.replace(",", "%2C") for u in urls], str(sortie), follow_links=suivre, allowed_domains=domaines_autorises(urls[0]),
+              include_url_regex=hotes_du_site(urls[0]),
               exclude_url_regex=exclusions() or None, xpath_selectors=XPATH, custom_settings={
                   "USER_AGENT": UA, "ROBOTSTXT_OBEY": True, "CLOSESPIDER_PAGECOUNT": max_pages,
                   "AUTOTHROTTLE_ENABLED": True, "AUTOTHROTTLE_TARGET_CONCURRENCY": 2.0,
@@ -136,7 +151,9 @@ def crawler(urls, sortie, dossier, max_pages, suivre):
               })
     if not sortie.exists() or sortie.stat().st_size == 0:
         return pd.DataFrame()
-    return pd.read_json(sortie, lines=True)
+    c = pd.read_json(sortie, lines=True)
+    # une passe faite seulement d'erreurs réseau (connexion coupée, DNS) n'a pas de colonne status
+    return c if "status" in c else c.assign(status=np.nan)
 
 
 def sitemap_et_robots(racine, depart, d):
@@ -163,7 +180,8 @@ def bardeaux(texte):
 
 
 def contenus_proches(textes, seuil=PROCHE):
-    """Paires de pages au contenu presque identique : MinHash (64 valeurs) et LSH (16 bandes de 4),
+    """Paires de pages au contenu presque identique : MinHash (64 valeurs) et LSH (8 bandes de 8, seuil
+    implicite vers 0,77 : un gabarit commun à J ≈ 0,6 ne produit plus de candidats en masse),
     puis similarité de Jaccard exacte des candidats. textes : url → texte. Renvoie {(u, v): similarité}."""
     p, rng = (1 << 31) - 1, np.random.default_rng(32)
     a, b = rng.integers(1, p, 64, dtype=np.uint64), rng.integers(0, p, 64, dtype=np.uint64)
@@ -175,8 +193,8 @@ def contenus_proches(textes, seuil=PROCHE):
         ensembles[u] = s
         x = np.fromiter(s, dtype=np.uint64)
         signature = ((a[:, None] * x[None, :] + b[:, None]) % p).min(axis=1)
-        for bande in range(16):
-            seaux[(bande, signature[bande * 4:(bande + 1) * 4].tobytes())].add(u)
+        for bande in range(8):
+            seaux[(bande, signature[bande * 8:(bande + 1) * 8].tobytes())].add(u)
     paires = {}
     for groupe in seaux.values():
         groupe = sorted(groupe)
@@ -190,7 +208,7 @@ def contenus_proches(textes, seuil=PROCHE):
 
 def canonique_de(ligne):
     """Canonique déclarée dans la page, sinon dans l'en-tête HTTP Link."""
-    c = premier(ligne.get("canonical"))
+    c = premier(ligne.get("canonique")) or premier(ligne.get("canonical"))
     if not c:
         lien = ligne.get("_entete_link") or ""
         m = re.search(r'<([^>]+)>\s*;[^,]*rel="?canonical', str(lien), re.I)
@@ -232,13 +250,14 @@ def principal(url, dossier, max_pages=2000):
     exclue = re.compile(exclusions() or r"(?!)")
 
     def passe(urls, nom, source, suivre):
-        budget = max_pages - sum(len(c) for c in cadres)
+        budget = max(max_pages - sum(len(c) for c in cadres), 0)
         urls = [u for u in urls if u not in vus and (u == depart or not exclue.search(u))]
-        if urls and budget <= 0:
-            non_explorees[source] = len(urls)
+        if len(urls) > budget:  # budget épuisé ou insuffisant : les adresses écartées sont comptées
+            non_explorees[source] = non_explorees.get(source, 0) + len(urls) - budget
         urls = urls[:budget]
-        if not urls or budget <= 0:
+        if not urls:
             return False
+        vus.update(urls)  # jamais redemandées, même si la réponse porte une autre adresse
         c = crawler(urls, d / f"{nom}.jsonl", d, budget, suivre)
         if c.empty:
             return False
@@ -250,20 +269,32 @@ def principal(url, dossier, max_pages=2000):
     passe([depart], "crawl", "liens", True)
     if not cadres:
         return terminer("aucune page explorée : vérifier l'adresse, robots.txt (Disallow) et le journal seo/scrapy.log.")
-    redirige = {}
-    for tour in range(1, 6):
-        destinations = []
-        for c in cadres:
-            for un, code, cible in zip(c["url_n"], c["status"], colonne(c, "resp_headers_Location")):
-                if 300 <= entier(code) < 400 and isinstance(cible, str) and cible:
-                    redirige[un] = normaliser(urllib.parse.urljoin(un, cible))
-                    destinations.append(redirige[un])
-        destinations = [u for u in dict.fromkeys(destinations) if meme_site(u, depart) and est_page(u)]
-        if not passe(destinations, f"crawl_redirections_{tour}", "liens", True):
-            break
+    redirige, issues = {}, []  # issues : passes ouvertes par des redirections
+
+    def suivre_redirections(source):
+        """Destinations des redirections puis, tour après tour, liens nouveaux des pages ainsi
+        trouvées, sans suivi par Scrapy : une passe qui suit les liens ignore ce que les passes
+        précédentes ont vu et retélécharge tout le site depuis la destination."""
+        for _ in range(30):
+            a_voir = []
+            for c in cadres:
+                for un, code, cible in zip(c["url_n"], c["status"], colonne(c, "resp_headers_Location")):
+                    if 300 <= entier(code) < 400 and isinstance(cible, str) and cible:
+                        redirige[un] = normaliser(urllib.parse.urljoin(un, cible))
+                        a_voir.append(redirige[un])
+                for un, m in zip(c["url_n"], colonne(c, "meta_refresh")):  # cibles des meta refresh
+                    a_voir.append(cible_refresh(premier(m), un))
+            a_voir += [normaliser(x) for c in issues for v in colonne(c, "links_url") for x in morceaux(v)]
+            a_voir = [u for u in dict.fromkeys(a_voir) if meme_site(u, depart) and est_page(u)]
+            if not passe(a_voir, f"crawl_redirections_{len(issues) + 1}", source, False):
+                return
+            issues.append(cadres[-1])
+
+    suivre_redirections("liens")
     passe(urls_sitemap, "crawl_sitemap", "sitemap", False)
+    suivre_redirections("sitemap")  # redirections rencontrées dans la passe sitemap
     df = pd.concat(cadres, ignore_index=True).drop_duplicates("url_n").reset_index(drop=True)
-    resume["plafond_atteint"] = len(df) >= max_pages
+    resume["plafond_atteint"] = sum(len(c) for c in cadres) >= max_pages or bool(non_explorees)
     if non_explorees.get("sitemap"):
         resume["sitemap_non_explorees"] = non_explorees["sitemap"]
     df["_entete_link"] = colonne(df, "resp_headers_Link")
@@ -281,7 +312,8 @@ def principal(url, dossier, max_pages=2000):
         d / "redirections.csv", index=False)
     type_contenu = colonne(df, "resp_headers_Content-Type").fillna("").astype(str)
     est_redirection = df["status"].fillna(0).astype(int).between(300, 399)
-    html = df[~est_redirection & (type_contenu.str.contains("html") | colonne(df, "title").notna())].copy()
+    en_erreur = df["status"].fillna(0).astype(int) >= 400  # même servie en texte ou en XML (stockage objet)
+    html = df[~est_redirection & (type_contenu.str.contains("html") | colonne(df, "title").notna() | en_erreur)].copy()
     if html.empty:
         return terminer("aucune page HTML parmi les adresses explorées.")
 
@@ -325,12 +357,12 @@ def principal(url, dossier, max_pages=2000):
     for ordre, (_, l) in enumerate(html.iterrows()):
         u, un = l["url"], l["url_n"]
         statut = entier(l.get("status"))
-        titre, desc = premier(l.get("title")), premier(l.get("meta_desc"))
+        titre, desc = premier(l.get("title")), premier(l.get("description")) or premier(l.get("meta_desc"))
         h1 = [h.strip() for h in morceaux(l.get("h1")) if h.strip()]
         h2 = [h.strip() for h in morceaux(l.get("h2")) if h.strip()]
         texte = "" if pd.isna(l.get("body_text")) else str(l.get("body_text"))
         mots = len(re.findall(r"\w+", texte))
-        robots = directives(premier(l.get("meta_robots")), entetes["x-robots-tag"][l.name])
+        robots = directives(*morceaux(l.get("meta_robots")), entetes["x-robots-tag"][l.name])  # toutes les balises
         noindex, refresh = bool(robots & {"noindex", "none"}), cible_refresh(premier(l.get("meta_refresh")), u)
         canonique = canonique_de(l)
         canonique_n = normaliser(urllib.parse.urljoin(u, canonique)) if canonique else ""
@@ -370,6 +402,15 @@ def principal(url, dossier, max_pages=2000):
         if not canonique and not noindex:
             ajouter(u, "canonique-absente")
         elif canonique_ailleurs:
+            if canonique_n not in statuts and meme_site(canonique_n, depart):
+                # cible jamais téléchargée (aucun lien) : son code et sa redirection éventuelle
+                code_c, finale_c, _, _ = recuperer(canonique_n, methode="HEAD")
+                if code_c in (403, 405, 501):  # HEAD refusé : redemander en GET
+                    code_c, finale_c, _, _ = recuperer(canonique_n)
+                if code_c:  # 0 = pas de réponse : ne rien conclure
+                    statuts[canonique_n] = code_c
+                    if normaliser(finale_c) != canonique_n:
+                        redirige[canonique_n] = normaliser(finale_c)
             if canonique_n in redirige or statuts.get(canonique_n, 200) != 200:
                 ajouter(u, "canonique-cassee", canonique)
             else:
@@ -484,7 +525,7 @@ def principal(url, dossier, max_pages=2000):
     cols = ["url", "code", "probleme", "detail", "categorie", "gravite"]
     pd.DataFrame(problemes, columns=cols).to_csv(d / "problemes.csv", index=False)
     en_200 = [p["url"] for p in pages if p["statut"] == 200]
-    (d.parent / "urls_html.txt").write_text("\n".join(en_200) + "\n", encoding="utf-8")
+    (d.parent / "urls_html.txt").write_text("".join(u + "\n" for u in en_200), encoding="utf-8")  # vide si aucune
     pages_par_code = defaultdict(set)
     for pb in problemes:
         pages_par_code[pb["code"]].add(normaliser(pb["url"]))
