@@ -10,16 +10,21 @@ direct (Server-Sent Events), parcourir les audits passés, regénérer une synth
 voir l'état de l'installation.
 
 Sécurité (une page web malveillante peut viser un serveur local) :
-  - écoute sur 127.0.0.1 seulement, en-tête Host vérifié (contre le DNS rebinding) ;
-  - jeton aléatoire transmis dans l'adresse d'ouverture, puis posé en cookie HttpOnly
-    SameSite=Strict, exigé pour tout le reste ;
-  - requêtes POST : en-tête X-Jeton et corps JSON en plus (contre le CSRF) ;
+  - écoute sur une adresse de bouclage propre à la session, tirée au hasard dans 127.0.0.0/8 :
+    un cookie ne tient pas compte du port, et celui de l'interface ne part donc pas vers les
+    autres services de 127.0.0.1 ou de localhost, dont les pages sont « d'un autre site » ;
+  - en-tête Host vérifié (contre le DNS rebinding) ;
+  - jeton aléatoire transmis dans l'adresse d'ouverture, échangé contre un cookie de session
+    HttpOnly SameSite=Strict (valeur distincte), exigé pour tout le reste ;
+  - requêtes POST : en-tête X-Jeton (troisième valeur, écrite dans la page) et corps JSON en plus
+    (contre le CSRF) ;
   - commandes lancées avec une liste d'arguments validés, jamais par un shell ;
   - fichiers de résultats servis sans jamais sortir de leur racine (liens symboliques compris).
 """
 import argparse
 import ctypes
 import datetime as dt
+import errno
 import fcntl
 import ipaddress
 import itertools
@@ -496,15 +501,23 @@ def etat_installation():
 
 
 # --- Serveur HTTP ------------------------------------------------------------------------------
+def adresse_dediee():
+    """Adresse de bouclage tirée au hasard dans 127.1.0.1 – 127.254.255.254 (Linux route tout
+    127.0.0.0/8 vers l'interface lo) : les cookies de l'interface y restent attachés."""
+    return f"127.{secrets.randbelow(254) + 1}.{secrets.randbelow(256)}.{secrets.randbelow(254) + 1}"
+
+
 class Serveur(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, port):
-        super().__init__(("127.0.0.1", port), Gestionnaire)
-        self.port = port
-        self.jeton = secrets.token_urlsafe(32)
-        self.cookie = f"kit_audit_jeton_{port}"   # les cookies ne distinguent pas les ports
-        self.hotes = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    def __init__(self, adresse, port):
+        super().__init__((adresse, port), Gestionnaire)
+        self.adresse, self.port = adresse, port
+        self.jeton = secrets.token_urlsafe(32)      # adresse d'ouverture affichée dans le terminal
+        self.session = secrets.token_urlsafe(32)    # valeur du cookie, jamais affichée
+        self.csrf = secrets.token_urlsafe(32)       # en-tête X-Jeton des POST, écrit dans la page
+        self.cookie = f"kit_audit_session_{port}"   # les cookies ne distinguent pas les ports
+        self.hotes = {f"{adresse}:{port}"}
         self.outils = liste_outils()
         self.libelles = {o["nom"]: o["libelle"] for o in self.outils} | {"synthese": "Synthèse"}
         self.travail = None
@@ -554,7 +567,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     raise Refus(404, "Adresse inconnue.")
                 return self._json(200, route(self._corps_json()))
             if chemin == "/":
-                page = (PAGES / "index.html").read_text(encoding="utf-8").replace("__JETON__", self.server.jeton)
+                page = (PAGES / "index.html").read_text(encoding="utf-8").replace("__JETON__", self.server.csrf)
                 return self._envoyer(200, page.encode(), "text/html; charset=utf-8", page_interface=True)
             if chemin in STATIQUES:
                 return self._envoyer(200, (PAGES / chemin[1:]).read_bytes(), STATIQUES[chemin], page_interface=True)
@@ -593,7 +606,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
             raise Refus(403, "Jeton invalide : relancer bin/interface et utiliser l'adresse affichée.")
         self.send_response(303)
         self.send_header("Location", "/")      # retire le jeton de la barre d'adresse et de l'historique
-        self.send_header("Set-Cookie", f"{self.server.cookie}={self.server.jeton}; Path=/; HttpOnly; SameSite=Strict")
+        self.send_header("Set-Cookie", f"{self.server.cookie}={self.server.session}; Path=/; HttpOnly; SameSite=Strict")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Length", "0")
@@ -602,12 +615,12 @@ class Gestionnaire(BaseHTTPRequestHandler):
     def _cookie_valide(self):
         for morceau in (self.headers.get("Cookie") or "").split(";"):
             nom, _, valeur = morceau.strip().partition("=")
-            if nom == self.server.cookie and secrets.compare_digest(valeur.encode(), self.server.jeton.encode()):
+            if nom == self.server.cookie and secrets.compare_digest(valeur.encode(), self.server.session.encode()):
                 return True
         return False
 
     def _verifier_post(self):
-        if not secrets.compare_digest((self.headers.get("X-Jeton") or "").encode(), self.server.jeton.encode()):
+        if not secrets.compare_digest((self.headers.get("X-Jeton") or "").encode(), self.server.csrf.encode()):
             raise Refus(403, "En-tête X-Jeton absent ou invalide.")
         origine = self.headers.get("Origin")
         if origine and origine.lower() not in {f"http://{h}" for h in self.server.hotes}:
@@ -768,12 +781,17 @@ class Gestionnaire(BaseHTTPRequestHandler):
 
 # --- Lancement ---------------------------------------------------------------------------------
 def ouvrir_serveur(premier):
-    for port in range(premier, min(premier + PORTS_ESSAYES, 65536)):
+    adresse, port = adresse_dediee(), premier
+    while port < min(premier + PORTS_ESSAYES, 65536):
         try:
-            return Serveur(port)
+            return Serveur(adresse, port)
         except OSError as e:
-            if e.errno != 98:   # EADDRINUSE : port occupé, on essaie le suivant
+            if e.errno == errno.EADDRNOTAVAIL and adresse != "127.0.0.1":
+                adresse = "127.0.0.1"      # système qui ne route pas tout 127.0.0.0/8 : repli, même port
+                continue
+            if e.errno != errno.EADDRINUSE:
                 raise
+            port += 1                      # port occupé : on essaie le suivant
     sys.exit(f"Aucun port libre entre {premier} et {premier + PORTS_ESSAYES - 1}.")
 
 
@@ -797,7 +815,7 @@ def principal(argv):
     p.add_argument("--sans-navigateur", action="store_true")
     args = p.parse_args(argv)
     serveur = ouvrir_serveur(args.port)
-    url = f"http://127.0.0.1:{serveur.port}/?jeton={serveur.jeton}"
+    url = f"http://{serveur.adresse}:{serveur.port}/?jeton={serveur.jeton}"
     print(f"Interface du kit d'audit web : {url}\nRésultats : {RESULTATS}\nCtrl+C pour arrêter.", flush=True)
     navigateur = None if args.sans_navigateur else ouvrir_navigateur(url)
     for sig in (signal.SIGTERM, signal.SIGHUP):   # kill PID, terminal fermé : même arrêt propre que Ctrl+C

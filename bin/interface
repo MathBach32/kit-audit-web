@@ -9,7 +9,8 @@
 # du kit ($CHROME_PATH --app, profil dédié dans ~/.cache/kit-audit-web/interface), sinon xdg-open.
 #
 # Usage : bin/interface [--port N] [--sans-navigateur]
-#   --port             premier port essayé sur 127.0.0.1 (défaut 8710 ; s'il est pris, le suivant libre)
+#   --port             premier port essayé (défaut 8710 ; s'il est pris, le suivant libre), sur une
+#                      adresse de bouclage 127.x.y.z tirée au hasard à chaque lancement
 #   --sans-navigateur  n'ouvre aucune fenêtre : l'adresse est seulement affichée
 #
 # L'adresse affichée contient un jeton d'accès valable jusqu'à l'arrêt : ne pas la partager.
