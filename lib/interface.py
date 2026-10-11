@@ -518,12 +518,32 @@ class Serveur(ThreadingHTTPServer):
         self.csrf = secrets.token_urlsafe(32)       # en-tête X-Jeton des POST, écrit dans la page
         self.cookie = f"kit_audit_session_{port}"   # les cookies ne distinguent pas les ports
         self.hotes = {f"{adresse}:{port}"}
+        self.jetons_uniques, self.verrou_jetons = set(), threading.Lock()
         self.outils = liste_outils()
         self.libelles = {o["nom"]: o["libelle"] for o in self.outils} | {"synthese": "Synthèse"}
         self.travail = None
         self.verrou = threading.Lock()
         self.verrou_etat = threading.Lock()
         self.installation = None
+
+    def adresse_ouverture(self, unique=False):
+        """Adresse à jeton. unique=True : jeton à usage unique, pour la fenêtre du navigateur, dont la
+        ligne de commande est lisible par tous les comptes (ps) ; il ne sert plus une fois la session
+        ouverte, alors que l'adresse affichée dans le terminal reste valable jusqu'à l'arrêt."""
+        jeton = self.jeton
+        if unique:
+            jeton = secrets.token_urlsafe(32)
+            with self.verrou_jetons:
+                self.jetons_uniques.add(jeton)
+        return f"http://{self.adresse}:{self.port}/?jeton={jeton}"
+
+    def jeton_valide(self, jeton):
+        if secrets.compare_digest(jeton.encode(), self.jeton.encode()):
+            return True
+        with self.verrou_jetons:
+            trouve = next((j for j in self.jetons_uniques if secrets.compare_digest(jeton.encode(), j.encode())), None)
+            self.jetons_uniques.discard(trouve)
+        return trouve is not None
 
     def demarrer(self, genre, site, dossier, outils, commande):
         with self.verrou:
@@ -602,11 +622,13 @@ class Gestionnaire(BaseHTTPRequestHandler):
 
     # --- Contrôles d'accès ---
     def _ouvrir_session(self, jeton):
-        if not secrets.compare_digest(jeton.encode(), self.server.jeton.encode()):
-            raise Refus(403, "Jeton invalide : relancer bin/interface et utiliser l'adresse affichée.")
+        valide = self.server.jeton_valide(jeton)
+        if not valide and not self._cookie_valide():   # jeton déjà utilisé, mais session ouverte : on y retourne
+            raise Refus(403, "Jeton invalide ou déjà utilisé : ouvrir l'adresse affichée par bin/interface.")
         self.send_response(303)
         self.send_header("Location", "/")      # retire le jeton de la barre d'adresse et de l'historique
-        self.send_header("Set-Cookie", f"{self.server.cookie}={self.server.session}; Path=/; HttpOnly; SameSite=Strict")
+        if valide:
+            self.send_header("Set-Cookie", f"{self.server.cookie}={self.server.session}; Path=/; HttpOnly; SameSite=Strict")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Length", "0")
@@ -815,9 +837,8 @@ def principal(argv):
     p.add_argument("--sans-navigateur", action="store_true")
     args = p.parse_args(argv)
     serveur = ouvrir_serveur(args.port)
-    url = f"http://{serveur.adresse}:{serveur.port}/?jeton={serveur.jeton}"
-    print(f"Interface du kit d'audit web : {url}\nRésultats : {RESULTATS}\nCtrl+C pour arrêter.", flush=True)
-    navigateur = None if args.sans_navigateur else ouvrir_navigateur(url)
+    print(f"Interface du kit d'audit web : {serveur.adresse_ouverture()}\nRésultats : {RESULTATS}\nCtrl+C pour arrêter.", flush=True)
+    navigateur = None if args.sans_navigateur else ouvrir_navigateur(serveur.adresse_ouverture(unique=True))
     for sig in (signal.SIGTERM, signal.SIGHUP):   # kill PID, terminal fermé : même arrêt propre que Ctrl+C
         signal.signal(sig, lambda *_: sys.exit(0))
     try:
