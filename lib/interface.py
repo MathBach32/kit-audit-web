@@ -96,10 +96,10 @@ def lire_json(chemin):
 # --- Validation des entrées --------------------------------------------------------------------
 def hote_valide(hote):
     try:
-        ipaddress.ip_address(hote)
-        return True
+        ip = ipaddress.ip_address(hote or "")
     except ValueError:
-        return bool(HOTE.match(hote or ""))
+        return bool(HOTE.fullmatch(hote or ""))
+    return getattr(ip, "scope_id", None) is None   # pas d'identifiant de zone IPv6 (« %… », texte libre)
 
 
 def valider_url(adresse):
@@ -135,7 +135,7 @@ def valider_voisins(texte):
     if not isinstance(texte, str) or len(texte) > 2000:
         raise Refus(400, "Domaines voisins invalides.")
     noms = [n for n in re.split(r"[\s,;]+", texte.strip().lower()) if n]
-    mauvais = [n for n in noms if not HOTE.match(n)]
+    mauvais = [n for n in noms if not HOTE.fullmatch(n)]
     if mauvais or len(noms) > 30:
         raise Refus(400, f"Domaines voisins invalides : {' '.join(mauvais)[:200] or 'trop nombreux'}.")
     return " ".join(noms)
@@ -143,7 +143,7 @@ def valider_voisins(texte):
 
 def dossier_audit(nom_domaine, jour):
     """Dossier <résultats>/<domaine>/<AAAA-MM-JJ> existant, sans sortir de la racine des résultats."""
-    if not isinstance(nom_domaine, str) or not isinstance(jour, str) or not JOUR.match(jour) \
+    if not isinstance(nom_domaine, str) or not isinstance(jour, str) or not JOUR.fullmatch(jour) \
             or not re.fullmatch(r"[A-Za-z0-9:._-]+", nom_domaine) or nom_domaine.startswith("."):
         raise Refus(400, "Audit inconnu.")
     d = (RESULTATS / nom_domaine / jour).resolve()
@@ -454,7 +454,7 @@ def lister_audits(libelles, travail):
         if dom.name.startswith(".") or dom.is_symlink() or not dom.is_dir():
             continue
         for d in dom.iterdir():
-            if JOUR.match(d.name) and not d.is_symlink() and d.is_dir():
+            if JOUR.fullmatch(d.name) and not d.is_symlink() and d.is_dir():
                 try:
                     audits.append(decrire_audit(d, libelles, travail))
                 except (OSError, ValueError, TypeError, AttributeError) as e:
@@ -694,7 +694,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
             raise Refus(400 if taille <= 0 else 413, "Corps JSON absent ou trop volumineux.")
         try:
             donnees = json.loads(self.rfile.read(taille))
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeDecodeError, RecursionError):   # RecursionError : JSON trop imbriqué
             raise Refus(400, "JSON invalide.") from None
         if not isinstance(donnees, dict):
             raise Refus(400, "Objet JSON attendu.")
