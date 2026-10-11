@@ -8,7 +8,7 @@
 # exclus par config/lychee.toml et listés à part, « à vérifier dans un navigateur ».
 #
 # Usage : bin/liens URL [--pages FICHIER] [--max N] [--dossier DOSSIER]
-#   --pages  pages à analyser (défaut : pages HTML de bin/sf-crawl ou bin/seo, sinon le sitemap)
+#   --pages  pages à analyser (défaut : pages HTML trouvées par bin/seo, sinon le sitemap)
 #   --max    nombre maximal de pages
 #
 # Sortie : liens/lychee.json, liens_casses.csv, a_verifier.csv, resume.json

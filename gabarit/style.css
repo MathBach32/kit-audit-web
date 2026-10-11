@@ -104,3 +104,8 @@ figcaption { font-size: 7.8pt; color: var(--encre-2); margin-top: 1.2mm; }
 .captures img { height: 95mm; width: auto; border: 0.6pt solid var(--filet); border-radius: 1.5mm; display: block; }
 
 .mention { font-size: 7.6pt; color: var(--encre-2); border-top: 0.5pt solid var(--filet); padding-top: 2mm; margin-top: 4mm; }
+
+dl.conseils { margin: 0 0 3.5mm; font-size: 8.4pt; }
+dl.conseils dt { font-weight: 700; margin-top: 1.8mm; break-after: avoid; }
+dl.conseils dd { margin: 0.4mm 0 0 4mm; color: var(--encre-2); }
+dl.conseils em { font-style: normal; font-weight: 700; color: var(--encre); }

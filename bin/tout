@@ -4,24 +4,33 @@
 # SPDX-License-Identifier: EUPL-1.2
 #
 # Audit complet : enchaîne toutes les commandes dans le même dossier d'audit, continue si l'une
-# échoue, puis produit la synthèse. Ordre : entetes, sf-crawl, seo, inventaire, liens, accessibilite,
-# lighthouse, psi, unlighthouse, captures, synthese.
+# échoue, puis produit la synthèse. Ordre : entetes, seo, inventaire, liens, accessibilite,
+# lighthouse, psi, unlighthouse, captures, synthese. Code de retour 1 si une commande a échoué.
 #
 # Usage : bin/tout URL [--sans "psi,unlighthouse"] [--seulement "seo,liens"] [--max N]
 #                      [--voisins "dom1.fr dom2.org"] [--dossier DOSSIER]
 #   --sans       commandes à sauter (séparées par des virgules)
 #   --seulement  commandes à lancer (la synthèse est toujours produite)
-#   --max        nombre maximal de pages pour seo, inventaire, liens, accessibilite et unlighthouse
+#   --max        nombre maximal de pages pour seo (environ), inventaire, liens, accessibilite et unlighthouse
 #   --voisins    domaines proches à tester dans bin/entetes
 #
 # Sortie : tous les sous-dossiers des outils, journal.txt, manifeste.json et synthese/synthese.pdf
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 OPTIONS="--sans --seulement --max --voisins"
 lire_arguments "$@"
+ORDRE=(entetes seo inventaire liens accessibilite lighthouse psi unlighthouse captures)
+# noms de --sans et --seulement vérifiés avant de créer le dossier d'audit
+for opt in --sans --seulement; do
+  OPTS[$opt]="${OPTS[$opt]:-}"; OPTS[$opt]="${OPTS[$opt]// /}"
+  IFS=',' read -ra noms <<< "${OPTS[$opt]}"
+  for nom in "${noms[@]}"; do
+    [ "$nom" = sf-crawl ] && { journal "ERREUR : sf-crawl a été retiré : bin/seo le remplace"; exit 2; }
+    [[ " ${ORDRE[*]} " == *" $nom "* ]] || { journal "ERREUR : commande inconnue dans $opt : $nom (connues : ${ORDRE[*]})"; exit 2; }
+  done
+done
 definir_dossier
 export KIT_AUDIT_DOSSIER="$DOSSIER_AUDIT"     # même dossier pour toutes les commandes, même après minuit
-ORDRE=(entetes sf-crawl seo inventaire liens accessibilite lighthouse psi unlighthouse captures)
-SANS=",${OPTS[--sans]:-},"; SEULEMENT="${OPTS[--seulement]:+,${OPTS[--seulement]},}"
+SANS=",${OPTS[--sans]},"; SEULEMENT="${OPTS[--seulement]:+,${OPTS[--seulement]},}"
 JOURNAL="$DOSSIER_AUDIT/journal.txt"
 ETATS="$DOSSIER_AUDIT/.etats.tsv"; : > "$ETATS"
 journal "audit complet de $SITE_URL → $DOSSIER_AUDIT" 2>&1 | tee -a "$JOURNAL" >&2
@@ -61,22 +70,26 @@ def version(*cmd):
 outils = []
 for ligne in (d / ".etats.tsv").read_text().splitlines():
     nom, code, duree = ligne.split("\t")
-    outils.append({"outil": nom.replace("sf-crawl", "sf"), "code": int(code), "duree_s": int(duree)})
+    outils.append({"outil": nom, "code": int(code), "duree_s": int(duree)})
 try:
     import advertools
     adv = advertools.__version__
 except ImportError:
     adv = ""
 versions = {
-    "Screaming Frog": version("dpkg-query", "-W", "-f=${Version}", "screamingfrogseospider"),
     "Navigateur": version_navigateur(os.environ.get("CHROME_PATH", "")) or os.environ.get("CHROME_PATH", ""),
     "Lighthouse": version("lighthouse", "--version"), "Unlighthouse": (version("unlighthouse-ci", "--version").split("/")[-1].split() or [""])[0],
     "pa11y-ci": version("pa11y-ci", "--version"), "lychee": version("lychee", "--version").replace("lychee ", ""),
     "advertools": adv,
 }
-manifeste = {"site": sys.argv[2], "dossier": str(d), "outils": outils, "versions": {k: v for k, v in versions.items() if v}}
+lances = {o["outil"] for o in outils}
+outil_de = {"Lighthouse": "lighthouse", "Unlighthouse": "unlighthouse", "pa11y-ci": "accessibilite", "lychee": "liens", "advertools": "seo"}
+versions = {k: v for k, v in versions.items() if v and outil_de.get(k, "") in lances | {""}}   # outils réellement lancés
+manifeste = {"site": sys.argv[2], "dossier": str(d), "outils": outils, "versions": versions}
 (d / "manifeste.json").write_text(json.dumps(manifeste, ensure_ascii=False, indent=1), encoding="utf-8")
 PY
 lancer synthese
+echecs="$(awk -F'\t' '$2 != 0' "$ETATS" | wc -l)"
 rm -f "$ETATS"
 journal "terminé : $DOSSIER_AUDIT/synthese/synthese.pdf" 2>&1 | tee -a "$JOURNAL" >&2
+[ "$echecs" -eq 0 ] || { journal "$echecs commande(s) en échec (voir journal.txt)" 2>&1 | tee -a "$JOURNAL" >&2; exit 1; }

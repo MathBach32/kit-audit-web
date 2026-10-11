@@ -12,6 +12,7 @@ Utilisable aussi en ligne de commande depuis les scripts shell :
   python3 -m kit version-navigateur CHEMIN → « Google Chrome 155.0… », « Chromium 157.0… » (« … snap » pour le snap)
 """
 import csv
+import json
 import os
 import re
 import shutil
@@ -22,7 +23,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-UA = os.environ.get("KIT_UA", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UA =os.environ.get("KIT_UA", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
                               "Chrome/154.0 Safari/537.36 kit-audit-web")
 EXTENSIONS_RESSOURCES = re.compile(
     r"\.(jpe?g|png|gif|webp|avif|svg|ico|bmp|tiff?|pdf|zip|gz|mp[34]|m4a|mov|avi|webm|ogg|wav|"
@@ -96,12 +98,25 @@ def lire_csv(chemin):
         return list(csv.DictReader(f))
 
 
-def colonne(ligne, *noms):
-    """Valeur de la première colonne présente parmi noms (exports Screaming Frog en français ou en anglais)."""
-    for n in noms:
-        if n in ligne:
-            return ligne[n]
-    return ""
+def lire_catalogue(chemin=None):
+    """Catalogue des constats SEO (config/problemes.csv) : code → ligne (libellé, catégorie, gravité…)."""
+    chemin = chemin or os.path.join(RACINE, "config", "problemes.csv")
+    with open(chemin, newline="", encoding="utf-8") as f:
+        lignes = [l for l in f if not l.startswith("#")]
+    return {l["code"]: l for l in csv.DictReader(lignes)}
+
+
+_LARGEURS = {}
+
+
+def largeur_px(texte, taille):
+    """Largeur en pixels de texte affiché en Arial à la taille donnée, sans crénage (comme les
+    résultats de recherche de Google : 20 px pour le title, 14 px pour la description)."""
+    if not _LARGEURS:
+        with open(os.path.join(RACINE, "config", "largeurs_arial.json"), encoding="utf-8") as f:
+            _LARGEURS.update(json.load(f)["largeurs"])
+    defaut = _LARGEURS["n"]
+    return round(sum(_LARGEURS.get(c, defaut) for c in texte) * taille / 1000)
 
 
 def lire_liste(chemin):

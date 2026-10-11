@@ -51,11 +51,6 @@ if command -v node > /dev/null && version_ge "$(node --version | tr -d v)" "$NOD
 else
   manque "Node ≥ $NODE_MIN (par exemple via nvm : nvm install 24)"
 fi
-if command -v screamingfrogseospider > /dev/null; then
-  ok "Screaming Frog SEO Spider $(dpkg-query -W -f='${Version}' screamingfrogseospider 2> /dev/null)"
-else
-  info "Screaming Frog absent : bin/sf-crawl indisponible (https://www.screamingfrog.co.uk/seo-spider/)"
-fi
 if docker buildx version > /dev/null 2>&1; then
   ok "docker buildx $(docker buildx version | awk '{print $2}') (image SEOnaut)"
 else
