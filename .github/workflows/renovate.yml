@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+# Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+# SPDX-License-Identifier: EUPL-1.2
+#
+# Renovate auto-hébergé : propose chaque mois les mises à jour des dépendances (renovate.json).
+# Les petites mises à jour sont intégrées automatiquement par GitHub quand la vérification passe.
+# Jeton : secret RENOVATE_TOKEN (jeton personnel « classic », droits public_repo et workflow) ; les
+# PR qu'il ouvre déclenchent la vérification, contrairement à celles du GITHUB_TOKEN. Sur GitLab,
+# le même renovate.json s'utilise avec le gabarit officiel renovate-runner.
+name: Renovate
+
+on:
+  schedule:
+    - cron: "17 3 1 * *"   # le 1er de chaque mois, 5 h 17 à Paris
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: renovatebot/github-action@230ce922b08968d0a4f6f70f295601daff09ef1d # v46.3.7
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
+          RENOVATE_REQUIRE_CONFIG: "required"
+          RENOVATE_PLATFORM_COMMIT: "enabled"
+          RENOVATE_ALLOWED_COMMANDS: '["^outils/maj-lychee\\.sh$", "^outils/maj-seonaut\\.sh$"]'

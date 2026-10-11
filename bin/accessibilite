@@ -8,7 +8,7 @@
 # pas une vérification manuelle (clavier, lecteur d'écran, sens des textes alternatifs).
 #
 # Usage : bin/accessibilite URL [--pages FICHIER] [--max N] [--dossier DOSSIER]
-#   --pages  pages à tester (défaut : pages HTML de bin/sf-crawl ou bin/seo, sinon le sitemap)
+#   --pages  pages à tester (défaut : pages HTML trouvées par bin/seo, sinon le sitemap)
 #   --max    nombre maximal de pages
 #
 # Sortie : accessibilite/pa11y.json, problemes.csv, regles.csv (règles par gravité), resume.json

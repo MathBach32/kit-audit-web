@@ -34,9 +34,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Métriques de police — `config/largeurs_arial.json`
+
+Largeurs de caractères lues dans la police Liberation Sans 2.1.5 (licence SIL Open Font License 1.1),
+dont les métriques sont celles d'Arial ; elles servent à estimer la largeur affichée des title et
+descriptions dans les résultats de recherche. Le fichier ne contient que ces mesures, pas la police.
+
 ## Outils utilisés sans être inclus
 
 Les outils appelés par le kit sont installés séparément, chacun sous sa propre licence :
 Lighthouse (Apache-2.0), Unlighthouse (MIT), pa11y-ci (LGPL-3.0), lychee (Apache-2.0 ou MIT),
-advertools (MIT), MariaDB (GPL-2.0, image Docker officielle). Screaming Frog SEO Spider est un
-logiciel propriétaire, utilisé ici dans sa version gratuite.
+advertools (MIT), MariaDB (GPL-2.0, image Docker officielle).
