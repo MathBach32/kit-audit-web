@@ -18,6 +18,7 @@ Sécurité (une page web malveillante peut viser un serveur local) :
   - fichiers de résultats servis sans jamais sortir de leur racine (liens symboliques compris).
 """
 import argparse
+import ctypes
 import datetime as dt
 import fcntl
 import ipaddress
@@ -201,6 +202,20 @@ def signaler(pids, sig):
                 pass
 
 
+try:   # prctl de la libc, préparé ici : le code exécuté entre fork et exec doit rester minimal
+    _PRCTL = ctypes.CDLL(None, use_errno=True).prctl
+except (OSError, AttributeError):
+    _PRCTL = None
+_PR_SET_PDEATHSIG, _SIGTERM = 1, int(signal.SIGTERM)
+
+
+def _terminer_avec_le_parent():
+    """preexec_fn : SIGTERM au processus lancé si le fil qui l'a lancé disparaît (interface tuée,
+    terminal fermé) ; Linux seulement, sans effet ailleurs."""
+    if _PRCTL is not None:
+        _PRCTL(_PR_SET_PDEATHSIG, _SIGTERM)
+
+
 class Travail:
     """Un audit (bin/tout) ou une regénération de synthèse (bin/synthese), en cours ou terminé."""
     numeros = itertools.count(1)
@@ -215,12 +230,13 @@ class Travail:
         self.cond = threading.Condition()
         if genre == "pdf":                 # bin/synthese seul : pas de ligne « === »
             self._commencer("synthese")
-        env = dict(os.environ, PYTHONUNBUFFERED="1", NO_COLOR="1")
-        self.proc = subprocess.Popen(commande, cwd=RACINE, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT, start_new_session=True)  # groupe de processus propre
-        self.lecteur = threading.Thread(target=self._lire, daemon=True)
-        self.lecteur.start()
-        threading.Thread(target=self._surveiller, daemon=True).start()
+        # Le processus est lancé par le fil qui l'attend jusqu'au bout : le signal de PR_SET_PDEATHSIG
+        # part à la fin du fil qui a lancé le processus, pas seulement à celle de l'interface.
+        self.proc, self.erreur, lance = None, None, threading.Event()
+        threading.Thread(target=self._surveiller, args=(commande, lance), daemon=True).start()
+        lance.wait()
+        if self.erreur:
+            raise self.erreur
 
     def en_cours(self):
         return self.statut == "en_cours"
@@ -230,7 +246,19 @@ class Travail:
             morceaux = [m for m in brut.decode("utf-8", "replace").rstrip("\n").split("\r") if m.strip()]
             self.ajouter(ANSI.sub("", morceaux[-1]) if morceaux else "")
 
-    def _surveiller(self):
+    def _surveiller(self, commande, lance):
+        env = dict(os.environ, PYTHONUNBUFFERED="1", NO_COLOR="1")
+        try:
+            self.proc = subprocess.Popen(commande, cwd=RACINE, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT, start_new_session=True,  # groupe de processus propre
+                                         preexec_fn=_terminer_avec_le_parent)
+        except (OSError, subprocess.SubprocessError) as e:
+            self.erreur = e
+            return
+        finally:
+            lance.set()
+        self.lecteur = threading.Thread(target=self._lire, daemon=True)
+        self.lecteur.start()
         code = self.proc.wait()
         self.lecteur.join(timeout=10)      # un petit-enfant peut garder le tube ouvert : ne pas l'attendre
         with self.cond:
@@ -329,6 +357,12 @@ class Travail:
             except (ProcessLookupError, PermissionError):
                 pass
             signaler(pids, signal.SIGKILL)
+            if self.genre == "audit":       # bin/tout, arrêté net, n'a rien pu écrire dans son journal
+                try:
+                    with (self.dossier / "journal.txt").open("a", encoding="utf-8") as j:
+                        j.write(f"[{time.strftime('%H:%M:%S')}] audit arrêté depuis l'interface graphique\n")
+                except OSError:
+                    pass
         if attendre:
             achever()
         else:
@@ -766,16 +800,20 @@ def principal(argv):
     url = f"http://127.0.0.1:{serveur.port}/?jeton={serveur.jeton}"
     print(f"Interface du kit d'audit web : {url}\nRésultats : {RESULTATS}\nCtrl+C pour arrêter.", flush=True)
     navigateur = None if args.sans_navigateur else ouvrir_navigateur(url)
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))   # kill PID : même arrêt propre que Ctrl+C
+    for sig in (signal.SIGTERM, signal.SIGHUP):   # kill PID, terminal fermé : même arrêt propre que Ctrl+C
+        signal.signal(sig, lambda *_: sys.exit(0))
     try:
         serveur.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        print("\nArrêt de l'interface.", flush=True)
-        if serveur.travail and serveur.travail.arreter(attendre=True):
-            print("Audit en cours arrêté.", flush=True)
+        # l'audit d'abord : après SIGHUP, écrire dans le terminal disparu peut lever une erreur
+        arrete = bool(serveur.travail and serveur.travail.arreter(attendre=True))
         serveur.server_close()
+        try:
+            print("\nArrêt de l'interface." + ("\nAudit en cours arrêté." if arrete else ""), flush=True)
+        except OSError:
+            pass
         if navigateur and navigateur.args[0] == CHROME and navigateur.poll() is None:
             navigateur.terminate()
     return 0
