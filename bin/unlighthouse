@@ -6,7 +6,7 @@
 # Lighthouse sur toutes les pages avec Unlighthouse (mobile, bridage comparable à PageSpeed Insights).
 #
 # Usage : bin/unlighthouse URL [--pages FICHIER] [--max N] [--dossier DOSSIER]
-#   --pages  pages à mesurer (défaut : pages HTML de bin/sf-crawl ou bin/seo, sinon le sitemap ;
+#   --pages  pages à mesurer (défaut : pages HTML trouvées par bin/seo, sinon le sitemap ;
 #            sans liste, Unlighthouse explore lui-même le site)
 #   --max    nombre maximal de pages (défaut 500)
 #
