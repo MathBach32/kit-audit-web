@@ -7,7 +7,7 @@
 # leur poids) et des vidéos YouTube (disponibilité vérifiée par oEmbed).
 #
 # Usage : bin/inventaire URL [--pages FICHIER] [--max N] [--dossier DOSSIER]
-#   --pages  pages à analyser (défaut : pages HTML de bin/sf-crawl ou bin/seo, sinon le sitemap)
+#   --pages  pages à analyser (défaut : pages HTML trouvées par bin/seo, sinon le sitemap)
 #   --max    nombre maximal de pages
 #
 # Sortie : inventaire/contenus.csv, pages_html.json, liens.csv, medias.csv, videos.csv, resume.json
