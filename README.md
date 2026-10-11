@@ -119,6 +119,24 @@ sous-dossier.
 - Les voyants de la synthèse sont calculés selon des seuils usuels : ils orientent, ils ne
   remplacent pas la lecture des détails.
 
+## Vérification et mises à jour automatiques
+
+- **Vérification** (`.github/workflows/verification.yml`) : à chaque proposition de modification,
+  à chaque mise à jour de `main` et chaque lundi, la CI installe le kit, lance `tests/verifier.sh`
+  avec Google Chrome puis avec Chromium, et construit puis démarre l'image SEOnaut. Toute la
+  logique est dans les scripts du dépôt : le fichier de CI n'en est qu'une enveloppe, à transposer
+  telle quelle vers GitLab CI ou Forgejo Actions.
+- **Mises à jour** (`renovate.json`, `.github/workflows/renovate.yml`) : Renovate, logiciel libre
+  auto-hébergé dans la CI, propose le 1er de chaque mois les nouvelles versions (outils Node,
+  Python, lychee, actions GitHub, images Docker, commit de SEOnaut), une fois qu'elles ont au moins
+  7 jours. Les petites mises à jour sont intégrées automatiquement si la vérification passe ; les
+  versions majeures, MariaDB, SEOnaut et les changements de version de Python ou de Node attendent
+  une relecture. Le même `renovate.json` sert sur GitLab avec le gabarit officiel
+  `renovate-runner`. Renovate utilise le secret `RENOVATE_TOKEN` (jeton personnel classique, droits
+  `public_repo` et `workflow`).
+- **Après une mise à jour du dépôt local** (`git pull`) : relancer `./installer.sh`, puis
+  `tests/verifier.sh` pour vérifier le kit avec le navigateur du poste.
+
 ## SEOnaut
 
 Le dossier [`seonaut/`](seonaut/README.md) déploie SEOnaut (crawler SEO avec interface web) en
