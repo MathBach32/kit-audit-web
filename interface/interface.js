@@ -21,6 +21,7 @@ const COULEURS = ["vert", "orange", "rouge", "gris"];   // voyants de la synthè
 const $ = (selecteur) => document.querySelector(selecteur);
 const journal = $("#journal");
 let travail = null, flux = null, enDirect = false, audits = [], installationChargee = false, lignesEnAttente = [];
+let connexion = "ok", sonde = null;   // « ok », « perdue » (interface injoignable) ou « perimee » (jeton refusé)
 
 // --- Outils généraux ---------------------------------------------------------------------------
 function el(balise, attributs = {}, ...enfants) {
@@ -56,15 +57,57 @@ function duree(secondes) {
   return s < 60 ? `${s}\u00a0s` : `${Math.floor(s / 60)}\u00a0min ${String(s % 60).padStart(2, "0")}\u00a0s`;
 }
 
+const COUPURES = {
+  perdue: "Interface injoignable : a-t-elle été arrêtée ? Si oui, relancer bin/interface et ouvrir la nouvelle adresse affichée.",
+  perimee: "Cette page n'est plus reconnue : l'interface a été relancée avec un nouveau jeton. Ouvrir la nouvelle adresse affichée par bin/interface.",
+};
+
 async function api(chemin, corps) {
   const options = { credentials: "same-origin", cache: "no-store" };
   if (corps !== undefined) {   // modification : jeton dans un en-tête et corps JSON (exigés par le serveur)
     Object.assign(options, { method: "POST", headers: { "Content-Type": "application/json", "X-Jeton": JETON }, body: JSON.stringify(corps) });
   }
-  const reponse = await fetch(chemin, options);
+  let reponse;
+  try {
+    reponse = await fetch(chemin, options);
+  } catch {   // TypeError du navigateur (« Failed to fetch ») : serveur arrêté ou injoignable
+    signalerCoupure("perdue");
+    throw new Error(COUPURES.perdue);
+  }
   const donnees = await reponse.json().catch(() => ({}));
+  if (reponse.status === 403 && /^Accès refusé/.test(donnees.erreur || "")) {
+    signalerCoupure("perimee");
+    throw new Error(COUPURES.perimee);
+  }
+  if (connexion !== "ok") retablir();
   if (!reponse.ok) throw new Error(donnees.erreur || `Erreur ${reponse.status}`);
   return donnees;
+}
+
+// --- Connexion perdue : bandeau persistant, suivi figé, nouvelle tentative toutes les 5 s ---------
+function signalerCoupure(etat) {
+  if (connexion === etat) return;
+  connexion = etat;
+  $("#coupure-texte").textContent = COUPURES[etat];
+  $("#coupure").hidden = false;
+  if (travail) afficherTravail(travail);
+  clearInterval(sonde);
+  sonde = etat === "perdue" ? setInterval(() => api("/api/statut").catch(() => {}), 5000) : null;
+}
+
+async function retablir() {
+  connexion = "ok";
+  clearInterval(sonde);
+  sonde = null;
+  $("#coupure").hidden = true;
+  annoncer("Connexion à l'interface rétablie.");
+  try {
+    const t = (await api("/api/statut")).travail;
+    if (t) {
+      afficherTravail(t);
+      if (t.statut === "en_cours" && !flux) ouvrirFlux();
+    }
+  } catch { /* nouvelle coupure : déjà signalée */ }
 }
 
 let minuterieAnnonce;
@@ -175,8 +218,11 @@ function ouvrirFlux() {
     if (enDirect) terminer(t);
     enDirect = false;
   });
-  flux.onerror = () => {
-    if (flux && flux.readyState === EventSource.CONNECTING) $("#indicateur-texte").textContent = "Connexion perdue, nouvelle tentative…";
+  flux.addEventListener("open", () => { if (connexion !== "ok") retablir(); });
+  flux.onerror = () => {   // CONNECTING : le navigateur réessaie ; CLOSED : réponse refusée (403), la sonde prend le relais
+    if (!flux) return;
+    if (flux.readyState === EventSource.CLOSED) fermerFlux();
+    signalerCoupure("perdue");
   };
 }
 
@@ -218,23 +264,27 @@ function terminer(t) {
 function afficherTravail(t) {
   travail = t;
   if (t.statut === "en_cours") enDirect = true;
-  const maintenant = Date.now() / 1000, actif = t.statut === "en_cours";
+  // Connexion perdue pendant un travail : son état réel est inconnu, rien ne doit le dire « en cours ».
+  const coupe = connexion !== "ok" && t.statut === "en_cours";
+  const maintenant = Date.now() / 1000, actif = t.statut === "en_cours" && !coupe;
   $("#suivi-vide").hidden = true;
   $("#suivi").hidden = false;
   $("#suivi-genre").textContent = t.genre === "pdf" ? "Regénération de la synthèse" : "Audit complet";
   $("#suivi-site").textContent = t.site;
-  const temps = actif ? `en cours depuis ${duree(maintenant - t.debut)}`
+  const temps = coupe ? "état inconnu depuis la perte de connexion" : actif ? `en cours depuis ${duree(maintenant - t.debut)}`
     : `terminé à ${formatHeure.format(new Date(t.fin * 1000))}, durée ${duree(t.fin - t.debut)}`;
   $("#suivi-meta").textContent = `Commencé à ${formatHeure.format(new Date(t.debut * 1000))}, ${temps}. Résultats : ${t.chemin || t.dossier}`;
   $("#suivi-meta").title = t.dossier;
-  const [libelle, couleur] = statutTravail(t);
+  const [libelle, couleur] = coupe ? ["Connexion perdue", "gris"] : statutTravail(t);
   $("#suivi-statut").replaceWith(el("span", { id: "suivi-statut", classe: `pastille ${couleur}` }, libelle));
   $("#suivi-outils").replaceChildren(...t.outils.map((o) => {
-    const [lib, coul] = !actif && o.etat === "attente" ? ["Non lancé", "gris"] : ETATS[o.etat] || [o.etat, "gris"];
-    return el("li", { classe: `etape ${o.etat}` },
+    const inconnu = coupe && o.etat === "en_cours";
+    const [lib, coul] = inconnu ? ["État inconnu", "gris"] : !actif && !coupe && o.etat === "attente" ? ["Non lancé", "gris"]
+      : ETATS[o.etat] || [o.etat, "gris"];
+    return el("li", { classe: `etape ${inconnu ? "inconnu" : o.etat}` },
       el("span", { classe: "nom" }, o.libelle),
       el("span", { classe: "droite" },
-        el("span", { classe: "duree" }, o.etat === "en_cours" ? duree(maintenant - o.debut) : duree(o.duree)),
+        el("span", { classe: "duree" }, o.etat === "en_cours" ? (coupe ? "" : duree(maintenant - o.debut)) : duree(o.duree)),
         pastille(lib, coul)));
   }));
   $("#arreter").hidden = !actif;
@@ -246,14 +296,14 @@ function afficherTravail(t) {
     ["#suivi-synthese", "synthese.html", t.synthese, "Ouvrir la synthèse", "Synthèse précédente"],
     ["#suivi-pdf", "synthese.pdf", t.pdf, "Ouvrir le PDF", "PDF précédent"]]) {
     const lien = $(id);
-    lien.hidden = actif || !base || !present;
+    lien.hidden = actif || coupe || !base || !present;
     lien.textContent = t.produite ? lib : `${libAncien}${avant}`;
     if (base) lien.href = `${base}${fichier}?v=${Math.round(t.fin || 0)}`;
   }
   const hote = (() => { try { return new URL(t.site).host; } catch { return t.site; } })();
   $("#indicateur").hidden = !actif;
   $("#indicateur-texte").textContent = t.genre === "pdf" ? `Synthèse en cours : ${hote}` : `Audit en cours : ${hote}`;
-  document.title = actif ? `● ${hote} — Kit d'audit web` : "Kit d'audit web";
+  document.title = coupe ? "Connexion perdue — Kit d'audit web" : actif ? `● ${hote} — Kit d'audit web` : "Kit d'audit web";
 }
 
 function ajouterLigne(texte) {
@@ -434,7 +484,7 @@ async function demarrer() {
   }
   const demande = location.hash.slice(1);
   afficherOnglet(ONGLETS.includes(demande) ? demande : t && t.statut === "en_cours" ? "suivi" : "nouvel");
-  setInterval(() => { if (travail && travail.statut === "en_cours") afficherTravail(travail); }, 1000);
+  setInterval(() => { if (connexion === "ok" && travail && travail.statut === "en_cours") afficherTravail(travail); }, 1000);
 }
 
 demarrer();
