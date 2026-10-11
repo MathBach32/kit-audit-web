@@ -70,6 +70,14 @@ class Refus(Exception):
         self.code, self.message = code, message
 
 
+def date_fichier(chemin):
+    """Date de modification ISO (à la minute) d'un fichier, None s'il n'existe pas."""
+    try:
+        return dt.datetime.fromtimestamp(Path(chemin).stat().st_mtime).isoformat(timespec="minutes")
+    except OSError:
+        return None
+
+
 def lire_json(chemin):
     try:
         return json.loads(Path(chemin).read_text(encoding="utf-8"))
@@ -334,12 +342,15 @@ class Travail:
             except ValueError:
                 chemin = None
             synthese = self.dossier / "synthese"
+            produite = self.etats.get("synthese", {}).get("etat") == "reussi"
             return {
                 "id": self.id, "genre": self.genre, "site": self.site, "dossier": str(self.dossier), "chemin": chemin,
                 "statut": self.statut, "code": self.code, "debut": self.debut, "fin": self.fin, "lignes": self.decalage + len(self.lignes),
                 "outils": [{"nom": n, "libelle": self.libelles.get(n, n), **e} for n, e in self.etats.items()],
                 "echecs": [self.libelles.get(n, n) for n, e in self.etats.items() if e["etat"] == "echec" and n != "synthese"],
                 "synthese": (synthese / "synthese.html").is_file(), "pdf": (synthese / "synthese.pdf").is_file(),
+                # synthèse produite par ce travail, ou laissée par un passage précédent (arrêt, échec)
+                "produite": produite, "synthese_date": date_fichier(synthese / "synthese.html"),
             }
 
 
@@ -372,19 +383,25 @@ def decrire_audit(d, libelles, travail):
     v = lire_json(d / "synthese/voyants.json") or {}
     outils = [o for o in m.get("outils", []) if isinstance(o, dict) and "outil" in o]
     nommer = lambda o: {"nom": o["outil"], "libelle": libelles.get(ALIAS.get(o["outil"], o["outil"]), o["outil"])}  # noqa: E731
-    pdf = d / "synthese/synthese.pdf"
+    pdf, page, manifeste = d / "synthese/synthese.pdf", d / "synthese/synthese.html", d / "manifeste.json"
     try:
         site = (d / "site.txt").read_text(encoding="utf-8").strip()
     except OSError:
         site = ""
+    en_cours, occupe = bool(travail and travail.en_cours() and travail.dossier == d), dossier_occupe(d)
     return {
         "domaine": d.parent.name, "date": d.name, "chemin": f"{d.parent.name}/{d.name}", "site": site,
         "reussis": [nommer(o) for o in outils if o.get("code") == 0], "echecs": [nommer(o) for o in outils if o.get("code") != 0],
         "voyants": v.get("voyants", []), "chiffres": v.get("chiffres", []),
         "synthese": (d / "synthese/synthese.html").is_file(), "pdf": pdf.is_file(),
-        "pdf_date": dt.datetime.fromtimestamp(pdf.stat().st_mtime).isoformat(timespec="minutes") if pdf.is_file() else None,
-        "en_cours": bool(travail and travail.en_cours() and travail.dossier == d),
-        "occupe": dossier_occupe(d),     # audit en cours, y compris lancé en ligne de commande
+        "pdf_date": date_fichier(pdf),
+        "en_cours": en_cours,
+        "occupe": occupe,     # audit en cours, y compris lancé en ligne de commande
+        # bin/tout supprime .etats.tsv en fin normale : s'il reste sans audit en cours, le dernier
+        # passage a été interrompu, et bilan et voyants viennent d'un passage précédent
+        "interrompu": (d / ".etats.tsv").exists() and not occupe and not en_cours,
+        # synthèse plus ancienne que le dernier manifeste : sa production a échoué au dernier passage
+        "synthese_perimee": page.is_file() and manifeste.is_file() and page.stat().st_mtime < manifeste.stat().st_mtime,
     }
 
 

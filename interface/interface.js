@@ -45,6 +45,11 @@ function dateFr(iso) {
   return Number.isNaN(d.getTime()) ? iso : formatJour.format(d);
 }
 
+function dateHeure(iso) {   // « 11 octobre 2026 à 10:58 » à partir de « 2026-10-11T10:58 »
+  const d = new Date(iso || "");
+  return Number.isNaN(d.getTime()) ? "date inconnue" : `${formatJour.format(d)} à ${formatHeure.format(d)}`;
+}
+
 function duree(secondes) {
   if (secondes === null || secondes === undefined) return "";
   const s = Math.max(0, Math.round(secondes));
@@ -233,10 +238,16 @@ function afficherTravail(t) {
         pastille(lib, coul)));
   }));
   $("#arreter").hidden = !actif;
+  // Liens vers la synthèse de ce travail ; après un arrêt ou un échec, celle d'un passage précédent
+  // est proposée sous un libellé qui le dit, avec sa date.
   const base = t.chemin ? `/resultats/${cheminUrl(t.chemin)}/synthese/` : null;
-  for (const [id, fichier, present] of [["#suivi-synthese", "synthese.html", t.synthese], ["#suivi-pdf", "synthese.pdf", t.pdf]]) {
+  const avant = t.produite ? "" : ` (${dateHeure(t.synthese_date)})`;
+  for (const [id, fichier, present, lib, libAncien] of [
+    ["#suivi-synthese", "synthese.html", t.synthese, "Ouvrir la synthèse", "Synthèse précédente"],
+    ["#suivi-pdf", "synthese.pdf", t.pdf, "Ouvrir le PDF", "PDF précédent"]]) {
     const lien = $(id);
     lien.hidden = actif || !base || !present;
+    lien.textContent = t.produite ? lib : `${libAncien}${avant}`;
     if (base) lien.href = `${base}${fichier}?v=${Math.round(t.fin || 0)}`;
   }
   const hote = (() => { try { return new URL(t.site).host; } catch { return t.site; } })();
@@ -311,8 +322,13 @@ function carteAudit(a, rang) {
   return el("article", { classe: "carte audit", "aria-labelledby": titre },
     el("div", { classe: "audit-tete" },
       el("div", {}, el("h3", { id: titre }, a.domaine), el("time", { datetime: a.date }, dateFr(a.date))),
-      a.en_cours ? pastille("En cours", "bleu") : a.occupe ? pastille("En cours hors de l'interface", "bleu") : null),
+      a.en_cours ? pastille("En cours", "bleu") : a.occupe ? pastille("En cours hors de l'interface", "bleu")
+        : a.interrompu ? pastille("Interrompu", "orange") : null),
     a.site ? el("p", { classe: "site" }, a.site) : null,
+    a.interrompu ? el("p", { classe: "note-audit" }, a.reussis.length || a.echecs.length
+      ? "Dernier passage interrompu : résultats incomplets ; bilan et voyants ci-dessous d'un passage précédent."
+      : "Audit interrompu : résultats incomplets.")
+      : a.synthese_perimee ? el("p", { classe: "note-audit" }, "Synthèse antérieure au dernier passage (sa production a échoué) : la regénérer.") : null,
     a.voyants.length
       ? el("dl", { classe: "voyants" }, a.voyants.flatMap((v) => [
         el("dt", {}, v.domaine), el("dd", {}, pastille(v.etat, COULEURS.includes(v.couleur) ? v.couleur : "gris"))]))
