@@ -5,7 +5,8 @@
 #
 # Vérification de bout en bout : sert le site témoin (tests/site-temoin) sur un port libre, lance
 # un audit complet sans PageSpeed Insights (qui exige une clé), puis compare les résultats aux
-# défauts attendus (tests/attendus.py). À lancer après chaque mise à jour des dépendances ou du kit.
+# défauts attendus (tests/attendus.py). Vérifie aussi l'entrée du menu et le mode lanceur de
+# l'interface (tests/lanceur.sh). À lancer après chaque mise à jour des dépendances ou du kit.
 #
 # Usage : tests/verifier.sh [--garder]
 #   --garder  conserve le dossier d'audit (sinon supprimé si tout est conforme)
@@ -30,5 +31,6 @@ echo "bin/tout : code $? (journal : $TRAVAIL/tout.log)"
 echo "bin/tout --seulement liens : code $? (journal : $TRAVAIL/relance.log)"
 PYTHONPATH="$RACINE/lib" "$PYTHON" "$RACINE/tests/attendus.py" "$TRAVAIL/audit"
 code=$?
+"$RACINE/tests/lanceur.sh" || code=1
 if [ "$code" -eq 0 ] && [ "$GARDER" = 0 ]; then rm -rf "$TRAVAIL"; else echo "résultats conservés : $TRAVAIL"; fi
 exit "$code"

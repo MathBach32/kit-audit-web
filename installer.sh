@@ -8,6 +8,7 @@
 #   - environnement Python .venv (versions figées et empreintes SHA-256 de requirements.txt)
 #   - lychee dans ~/.local/bin (release GitHub, somme SHA-256 vérifiée)
 #   - fichier des secrets ~/.config/audit-kit/secrets.env (créé vide, droits 600, s'il manque)
+#   - entrée « Kit d'audit web » du menu des applications, dans une session graphique (outils/lanceur.sh)
 #
 # Usage : ./installer.sh [--verifier]
 #   --verifier  contrôle seulement, n'installe rien
@@ -103,6 +104,18 @@ elif [ "$VERIFIER" = 0 ]; then
   info "$SECRETS créé (droits 600) : y renseigner PSI_API_KEY"
 else
   info "$SECRETS absent : bin/psi indisponible"
+fi
+
+echo "Menu des applications"
+LANCEUR="${XDG_DATA_HOME:-$HOME/.local/share}/applications/kit-audit-web.desktop"
+if [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+  info "pas de session graphique : entrée du menu non installée (outils/lanceur.sh pour l'ajouter)"
+elif [ "$VERIFIER" = 0 ]; then
+  outils/lanceur.sh > /dev/null && ok "entrée « Kit d'audit web » ($LANCEUR)" || manque "entrée du menu (outils/lanceur.sh)"
+elif grep -qF "$PWD/bin/interface" "$LANCEUR" 2> /dev/null; then
+  ok "entrée « Kit d'audit web » ($LANCEUR)"
+else
+  info "entrée « Kit d'audit web » absente, ou vers une autre copie du kit : lancer outils/lanceur.sh"
 fi
 
 [ "$manques" -eq 0 ] && echo "Tout est prêt." || { echo "$manques prérequis manquant(s)."; exit 1; }

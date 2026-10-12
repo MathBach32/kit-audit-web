@@ -938,7 +938,10 @@ def surveiller_fenetre(serveur):
     debut, vue, absente, audit = time.monotonic(), False, None, None
     while True:
         time.sleep(1)
-        if pid_fenetre():
+        pid = pid_fenetre()
+        if pid:
+            if not vue:
+                print(f"Fenêtre ouverte (navigateur : PID {pid}).", flush=True)
             vue, absente, audit = True, None, None
             continue
         if not vue and time.monotonic() - debut < DELAI_PREMIERE_FENETRE:
