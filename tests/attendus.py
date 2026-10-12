@@ -146,6 +146,8 @@ class Verification:
         self.exiger("/surcharge.xml" not in casses and "refus temporaire" in a_verifier.get("/surcharge.xml", ""),
                     f"liens : /surcharge.xml (429) devrait être un refus temporaire à vérifier ({a_verifier.get('/surcharge.xml')})")
         self.exiger("/defi.xml" not in casses and "/defi.xml" not in a_verifier, "liens : le défi par cookie de /defi.xml n'a pas été franchi")
+        speciaux = [l["lien"] for l in self.lire_csv("liens/a_verifier.csv") if l["lien"].startswith(("tel:", "mailto:"))]
+        self.exiger(not speciaux, f"liens : liens téléphone ou courriel classés à vérifier ({speciaux[:3]})")
         # la page de redirection meta refresh n'a aucun lien à vérifier
         self.exiger(r.get("pages_analysees") == PAGES_200 - 1, f"liens : {r.get('pages_analysees')} pages analysées au lieu de {PAGES_200 - 1}")
         self.exiger(r.get("redirections", 0) >= 2, f"liens : {r.get('redirections')} redirection(s) au lieu d'au moins 2")

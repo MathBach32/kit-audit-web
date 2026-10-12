@@ -18,10 +18,11 @@ from pathlib import Path
 
 from kit import meme_site
 
-# Liens exclus de lychee qu'il n'y a pas lieu de vérifier à la main :
-# vidéos YouTube (vérifiées par bin/inventaire, oEmbed) et points d'accès techniques que lychee
-# écarte de lui-même (xmlrpc.php).
-NON_A_VERIFIER = re.compile(r"^https?://((www\.)?youtube(-nocookie)?\.com/(embed|watch|shorts)|youtu\.be/)|/xmlrpc\.php$")
+# Liens exclus de lychee qu'il n'y a pas lieu de vérifier à la main : vidéos YouTube (vérifiées
+# par bin/inventaire, oEmbed), points d'accès techniques que lychee écarte de lui-même
+# (xmlrpc.php) et liens qui ne mènent pas à une page web (téléphone, courriel, SMS, JavaScript).
+NON_A_VERIFIER = re.compile(r"^https?://((www\.)?youtube(-nocookie)?\.com/(embed|watch|shorts)|youtu\.be/)|/xmlrpc\.php$"
+                            r"|^(tel|mailto|sms|javascript|data):", re.I)
 FAMILLES = [  # (motif, libellé) : regroupement lisible des liens « à vérifier dans un navigateur »
     (r"[?&]share=", "boutons de partage (?share=)"),
     (r"wordpress\.com/log-in", "connexion WordPress.com"),
