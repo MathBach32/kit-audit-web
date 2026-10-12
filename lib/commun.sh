@@ -10,15 +10,14 @@
 #   KIT_AUDIT_RESULTATS  racine des résultats (défaut : <kit>/resultats)
 #   KIT_AUDIT_DOSSIER    dossier d'audit imposé (sinon <résultats>/<domaine>/<AAAA-MM-JJ>)
 #   KIT_AUDIT_SECRETS    fichier des secrets (défaut : ~/.config/audit-kit/secrets.env)
-#   CHROME_PATH          navigateur (défaut : /usr/bin/google-chrome)
+#   CHROME_PATH          navigateur imposé (défaut : Google Chrome ou Chromium détecté par lib/kit.py)
+#   KIT_NAVIGATEUR_LIBRE 1 : CHROME_PATH accepté sans contrôle de version (Brave, Microsoft Edge…)
 
 set -uo pipefail
 
 KIT_RACINE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 export KIT_RACINE
 export PATH="$KIT_RACINE/node_modules/.bin:$KIT_RACINE/.venv/bin:$HOME/.local/bin:$PATH"
-export CHROME_PATH="${CHROME_PATH:-/usr/bin/google-chrome}"
-export PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-$CHROME_PATH}"
 export PUPPETEER_SKIP_DOWNLOAD=1
 # Chrome crée un socket Unix dans TMPDIR : au-delà d'environ 60 caractères, le chemin dépasse la
 # limite du système (108) et Chrome s'arrête aussitôt (SIGABRT). On se rabat alors sur /tmp.
@@ -27,6 +26,11 @@ export KIT_UA="${KIT_UA:-Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHT
 export PYTHONPATH="$KIT_RACINE/lib${PYTHONPATH:+:$PYTHONPATH}"
 PYTHON="$KIT_RACINE/.venv/bin/python"
 [ -x "$PYTHON" ] || PYTHON=python3
+# Navigateur : CHROME_PATH s'il est défini et accepté (chemin absolu), sinon Google Chrome ou Chromium
+# détecté. KIT_NAVIGATEUR vide si aucun : CHROME_PATH garde alors sa valeur d'origine, que le message
+# d'erreur cite, et exiger_navigateur arrête les commandes qui ont besoin d'un navigateur.
+KIT_NAVIGATEUR="$("$PYTHON" -m kit navigateur 2> /dev/null)"
+if [ -n "$KIT_NAVIGATEUR" ]; then export CHROME_PATH="$KIT_NAVIGATEUR" PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-$KIT_NAVIGATEUR}"; fi
 
 declare -A OPTS=()
 
@@ -69,6 +73,18 @@ definir_dossier() {
   DOSSIER_AUDIT="${KIT_AUDIT_DOSSIER:-${KIT_AUDIT_RESULTATS:-$KIT_RACINE/resultats}/$SITE_DOMAINE/$(date +%F)}"
   mkdir -p "$DOSSIER_AUDIT"
   export SITE_URL SITE_DOMAINE DOSSIER_AUDIT
+}
+
+# verrouiller_dossier : un seul bin/tout ou bin/synthese à la fois par dossier d'audit (ligne de
+# commande ou interface graphique). Verrou flock sur <dossier>/.verrou, tenu par le descripteur 9
+# jusqu'à la fin du script ; bin/tout le ferme pour les commandes qu'il lance (9>&-), et
+# KIT_AUDIT_VERROU dit à bin/synthese que son parent le tient déjà.
+verrouiller_dossier() {
+  [ "${KIT_AUDIT_VERROU:-}" = "$DOSSIER_AUDIT" ] && return 0
+  command -v flock > /dev/null || { journal "attention : flock introuvable, dossier d'audit non verrouillé"; return 0; }
+  exec 9> "$DOSSIER_AUDIT/.verrou"
+  flock -w 3 9 || echec "un audit est déjà en cours dans $DOSSIER_AUDIT : attendre sa fin"
+  export KIT_AUDIT_VERROU="$DOSSIER_AUDIT"
 }
 
 # preparer_sortie OUTIL : definir_dossier, puis SORTIE=<dossier d'audit>/OUTIL (vidé s'il existait).
@@ -138,3 +154,5 @@ charger_cle_psi() {
 
 # exiger COMMANDE [conseil] : arrête le script si la commande est introuvable.
 exiger() { command -v "$1" > /dev/null || echec "$1 introuvable. ${2:-Lancer ./installer.sh}"; }
+# exiger_navigateur : arrête le script si aucun navigateur (Google Chrome ou Chromium) n'est utilisable.
+exiger_navigateur() { [ -n "$KIT_NAVIGATEUR" ] || echec "$("$PYTHON" -m kit navigateur 2>&1 > /dev/null)"; }

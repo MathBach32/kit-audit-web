@@ -14,13 +14,76 @@ Origine : scripts écrits pour un audit réel de site (octobre 2026), puis gén�
 ./installer.sh --verifier   # contrôle seulement
 ```
 
-Prérequis du système : Google Chrome ou Chromium (chemin à indiquer dans `CHROME_PATH`), Node ≥
-22.19, Python 3 avec `venv`, `curl`, `dig`, `openssl`. Facultatif : `docker buildx` (pour
-construire l'image SEOnaut).
+Prérequis du système : Google Chrome ou Chromium (voir [Navigateur](#navigateur)), Node ≥ 22.19,
+Python 3 avec `venv`, `curl`, `dig`, `openssl`. Facultatif : `docker buildx` (pour construire
+l'image SEOnaut).
 
 La clé PageSpeed Insights se range **hors du dépôt**, dans `~/.config/audit-kit/secrets.env`
 (droits 600) : `PSI_API_KEY=…`. Elle est lue sans exécuter le fichier, et transmise dans un en-tête
 HTTP : elle n'apparaît ni dans les URL, ni dans la liste des processus, ni dans les journaux.
+
+## Navigateur
+
+Le kit fonctionne avec **Google Chrome ou Chromium**, au choix. Ce sont deux logiciels distincts :
+Chrome est construit par Google à partir de Chromium, mais n'installe pas de commande `chromium`.
+L'un ou l'autre suffit.
+
+Le navigateur est détecté automatiquement (`lib/kit.py`), dans cet ordre : `google-chrome-stable`,
+`google-chrome`, `chromium`, `/snap/bin/chromium`, `chromium-browser`, `/usr/lib/chromium/chromium`,
+`/opt/google/chrome/chrome`. Un candidat n'est retenu que s'il répond à `--version` par une version
+de Chrome ou de Chromium : sur Ubuntu, `chromium-browser` peut n'être qu'un script qui propose
+d'installer le snap, ou qui renvoie vers lui. `./installer.sh` affiche le navigateur retenu, et
+`manifeste.json` (clé « Navigateur ») celui de chaque audit ; le Chromium du snap s'y signale par sa
+version (« Chromium … snap »).
+
+Pour en imposer un : `CHROME_PATH=/chemin/du/navigateur bin/tout exemple.fr`. Le chemin imposé est
+utilisé tel quel : s'il n'est pas exécutable, ou s'il ne répond pas à `--version` comme Google Chrome
+ou Chromium, les commandes s'arrêtent au lieu de se rabattre sur un autre navigateur. Pour un autre
+navigateur de la famille Chromium (Brave, Microsoft Edge…), non testé avec le kit, ajouter
+`KIT_NAVIGATEUR_LIBRE=1` : le chemin imposé est alors accepté sans contrôle de version.
+
+Chromium en **snap** (Ubuntu) est confiné : il ne voit ni les dossiers cachés de `$HOME`, ni le
+`/tmp` de l'hôte. Les captures et le PDF de synthèse, écrits par le navigateur lui-même, doivent donc
+rester sous `$HOME`, hors dossier caché : c'est le cas par défaut quand le kit y est installé. Ne pas
+diriger `KIT_AUDIT_RESULTATS` ni `--dossier` vers `/tmp`.
+
+## Interface graphique
+
+```bash
+bin/interface                     # ouvre l'interface dans une fenêtre du navigateur du kit
+bin/interface --sans-navigateur   # affiche seulement l'adresse, à ouvrir soi-même
+```
+
+Une page locale pour lancer un audit (adresse, outils à cocher, nombre maximal de pages, domaines
+voisins), suivre son avancement en direct (état et durée de chaque outil, journal), l'arrêter,
+parcourir les audits passés (voyants de la synthèse, outils réussis ou en échec), ouvrir les
+synthèses HTML et PDF, regénérer une synthèse, ouvrir le dossier d'un audit et vérifier l'installation
+(navigateur, versions, clé PSI, `./installer.sh --verifier`). Elle fonctionne hors ligne, en clair
+ou en sombre selon le réglage du poste, et sur un écran de téléphone.
+
+Le serveur (`lib/interface.py`, Python sans dépendance) écoute sur une adresse de bouclage tirée au
+hasard à chaque lancement (`127.x.y.z`, repli sur `127.0.0.1` si le système ne la permet pas),
+port 8710 ou le suivant libre (`--port N` pour en choisir un autre). La fenêtre s'ouvre avec
+`$CHROME_PATH --app` dans un profil dédié (`~/.cache/kit-audit-web/interface`), sinon avec
+`xdg-open`. `Ctrl+C`, `kill` ou la fermeture du terminal arrêtent l'interface, et l'audit en cours
+s'il y en a un. La liste des outils vient de `bin/tout --liste-outils` ; les voyants, de
+`synthese/voyants.json`, écrit par la synthèse.
+
+Un seul audit à la fois par dossier d'audit, qu'il soit lancé depuis l'interface ou en ligne de
+commande : `bin/tout` et `bin/synthese` prennent un verrou (`flock` sur `<dossier>/.verrou`), et
+l'interface affiche « En cours hors de l'interface » sur la carte d'un audit lancé dans un
+terminal. Le statut final tient compte des outils : « Terminé avec N échec(s) », ou « Échec :
+synthèse non produite ». Une synthèse n'est remplacée que si le nouveau PDF a été produit.
+
+Sécurité : l'adresse affichée contient un jeton propre à la session, échangé à l'ouverture contre
+un cookie de session `HttpOnly` `SameSite=Strict` (valeur distincte). Comme un cookie ne tient pas
+compte du port, l'adresse de bouclage dédiée l'empêche de partir vers les autres services de
+`127.0.0.1` ou de `localhost`. Est refusée toute requête sans ce cookie, avec un en-tête `Host`
+inattendu (contre le *DNS rebinding*), venue d'une autre page (`Origin`, `Sec-Fetch-Site`) ou,
+pour une modification, sans l'en-tête `X-Jeton` (troisième valeur, écrite dans la page) et un
+corps JSON. Les commandes sont lancées sans shell, avec des arguments validés ; seuls les fichiers
+du dossier des résultats sont servis, sans exécuter de script. Ne pas partager l'adresse affichée :
+elle donne accès à l'interface jusqu'à son arrêt.
 
 ## Utilisation
 
@@ -28,7 +91,7 @@ HTTP : elle n'apparaît ni dans les URL, ni dans la liste des processus, ni dans
 bin/tout https://exemple.fr/                       # audit complet + synthèse
 bin/tout exemple.fr --sans psi,unlighthouse        # en sautant des étapes
 bin/liens exemple.fr --max 200                     # une seule commande
-bin/synthese exemple.fr                            # refaire la synthèse du jour
+bin/synthese exemple.fr                            # refaire la synthèse du jour (l'ancienne reste si elle échoue)
 ```
 
 Chaque commande affiche son mode d'emploi avec `--help`. Options communes : `--dossier` (dossier
@@ -44,8 +107,8 @@ d'audit imposé), et selon les commandes `--pages FICHIER` (liste d'URL) et `--m
 | `lighthouse` | Lighthouse 13.5.0 | mesures locales, mobile et ordinateur, sur 6 pages types |
 | `psi` | API PageSpeed Insights | mêmes mesures chez Google, plus les données de vrais visiteurs (CrUX) si elles existent |
 | `unlighthouse` | Unlighthouse 0.19.1 | Lighthouse sur toutes les pages, rapport consultable |
-| `captures` | Chrome headless | captures ordinateur (1366 px) et mobile (390 px) des pages types |
-| `synthese` | Python + Chrome | `synthese/synthese.html` et `synthese.pdf` |
+| `captures` | navigateur sans interface | captures ordinateur (1366 px) et mobile (390 px) des pages types |
+| `synthese` | Python + navigateur | `synthese/synthese.html` et `synthese.pdf` |
 
 Les pages types sont l'accueil, les quatre pages les moins profondes du sitemap et une page
 profonde (un article, en général). Les commandes qui parcourent tout le site réutilisent la liste
@@ -106,7 +169,7 @@ sous-dossier.
   construit dans le navigateur doit être audité avec les outils fondés sur Chrome (Lighthouse,
   Unlighthouse, pa11y).
 - Ne pas créer ni supprimer de réseaux Docker (`docker compose up/down`) pendant un audit :
-  Chrome interrompt alors ses chargements (`ERR_NETWORK_CHANGED`), ce qui fausse Lighthouse,
+  le navigateur interrompt alors ses chargements (`ERR_NETWORK_CHANGED`), ce qui fausse Lighthouse,
   Unlighthouse et pa11y.
 - La règle axe `frame-tested` est classée « à vérifier » : elle signale une iframe (vidéo,
   publicité) que le test n'a pas pu analyser, pas un défaut.
@@ -120,6 +183,16 @@ sous-dossier.
   n'est chargé que par l'outil en ligne de commande de `js-yaml` 3, jamais appelé.
 - Les voyants de la synthèse sont calculés selon des seuils usuels : ils orientent, ils ne
   remplacent pas la lecture des détails.
+- Interface graphique : l'adresse passée au navigateur figure dans sa ligne de commande, lisible par
+  les autres comptes du poste (`ps`) ; son jeton est à usage unique et ne sert plus une fois la
+  fenêtre ouverte. L'interface est prévue pour un poste personnel. Un audit lancé en ligne de
+  commande n'apparaît pas dans le suivi en direct, seulement dans les audits passés (« En cours hors
+  de l'interface »). Le verrou ne concerne que `bin/tout` et `bin/synthese` : une commande isolée
+  (`bin/lighthouse`…) lancée à la main n'en tient pas compte. Si l'interface est tuée net
+  (`kill -9`), `bin/tout` s'arrête aussitôt, mais l'outil en cours ne s'arrête qu'à sa prochaine
+  écriture. Les rapports Lighthouse et Unlighthouse, qui ont besoin de JavaScript, ne s'ouvrent pas
+  depuis l'interface (scripts bloqués dans les fichiers servis) : les ouvrir depuis le dossier de
+  l'audit.
 
 ## Vérification et mises à jour automatiques
 

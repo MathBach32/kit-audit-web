@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
 # Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
 # SPDX-License-Identifier: EUPL-1.2
-"""Synthèse automatique d'un audit : HTML puis PDF (Chrome headless).
+"""Synthèse automatique d'un audit : HTML puis PDF (navigateur sans interface : Google Chrome ou Chromium).
 
   python3 -m synthese DOSSIER_AUDIT   → DOSSIER_AUDIT/synthese/synthese.html et synthese.pdf
 
@@ -12,18 +12,18 @@ explications et corrections génériques du catalogue config/problemes.csv.
 import datetime as dt
 import html
 import json
-import os
 import re
+import shutil
 import subprocess
 import sys
 import urllib.parse
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from kit import lire_catalogue, lire_csv
+from kit import lire_catalogue, lire_csv, navigateur, sans_navigateur
 
 RACINE = Path(__file__).resolve().parents[1]
-CHROME = os.environ.get("CHROME_PATH", "/usr/bin/google-chrome")
+CHROME = navigateur()  # CHROME_PATH (défini par lib/commun.sh), sinon Google Chrome ou Chromium détecté
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 OUTILS = {  # sous-dossier → libellé
     "entetes": "En-têtes, TLS, DNS, domaine", "seo": "advertools (exploration et SEO)",
@@ -149,7 +149,7 @@ class Synthese:
     # --- Performance -----------------------------------------------------------------------------
     def performance(self):
         parties, perf_mobile, lcp_mobile = [], [], []
-        for outil, nom in (("psi", "PageSpeed Insights (Lighthouse chez Google)"), ("lighthouse", "Lighthouse local (Chrome du poste)")):
+        for outil, nom in (("psi", "PageSpeed Insights (Lighthouse chez Google)"), ("lighthouse", "Lighthouse local (navigateur du poste)")):
             lignes = lire_csv(self.d / outil / "resume.csv")
             if not lignes:
                 continue
@@ -463,14 +463,40 @@ selon des seuils usuels ; le détail et les données brutes suivent.</p></div>
 def principal(dossier):
     d = Path(dossier)
     s = Synthese(d)
-    sortie = d / "synthese"
-    sortie.mkdir(exist_ok=True)
-    page = sortie / "synthese.html"
+    # Produite dans un dossier voisin (même profondeur, pour les liens « ../captures/ »), puis mise
+    # à la place de synthese/ seulement si le PDF existe : un échec garde la synthèse précédente.
+    sortie, nouvelle, ancienne = d / "synthese", d / ".synthese-nouvelle", d / ".synthese-ancienne"
+    shutil.rmtree(nouvelle, ignore_errors=True)
+    nouvelle.mkdir()
+    page = nouvelle / "synthese.html"
     page.write_text(s.html(), encoding="utf-8")
-    pdf = sortie / "synthese.pdf"
-    subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--no-pdf-header-footer", "--allow-file-access-from-files",
-                    f"--print-to-pdf={pdf}", page.as_uri()], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    print(f"→ {page}\n→ {pdf}")
+    # voyants et chiffres clés pour l'interface graphique
+    (nouvelle / "voyants.json").write_text(json.dumps({
+        "site": s.site, "date": s.date,
+        "voyants": [{"domaine": d, "couleur": c, "etat": e, "texte": x} for d, c, e, x in s.voyants],
+        "chiffres": [{"valeur": v, "libelle": l} for v, l in s.chiffres[:8]]}, ensure_ascii=False, indent=1), encoding="utf-8")
+    pdf = nouvelle / "synthese.pdf"
+    reste = lambda: "synthèse précédente conservée" if (sortie / "synthese.pdf").is_file() else "aucune synthèse produite"
+    if not CHROME:
+        shutil.rmtree(nouvelle, ignore_errors=True)
+        print(f"ERREUR : PDF impossible : {sans_navigateur()} ; {reste()}.", file=sys.stderr)
+        return 1
+    try:
+        subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--no-pdf-header-footer", "--allow-file-access-from-files",
+                        f"--print-to-pdf={pdf}", page.as_uri()], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if not pdf.is_file() or not pdf.stat().st_size:
+            raise OSError("fichier PDF absent ou vide")
+    except (OSError, subprocess.CalledProcessError) as e:
+        shutil.rmtree(nouvelle, ignore_errors=True)
+        detail = f"code {e.returncode}" if isinstance(e, subprocess.CalledProcessError) else (e.strerror or str(e))
+        print(f"ERREUR : PDF non produit par {CHROME} ({detail}) ; {reste()}.", file=sys.stderr)
+        return 1
+    shutil.rmtree(ancienne, ignore_errors=True)
+    if sortie.exists():
+        sortie.rename(ancienne)
+    nouvelle.rename(sortie)
+    shutil.rmtree(ancienne, ignore_errors=True)
+    print(f"→ {sortie / page.name}\n→ {sortie / pdf.name}")
     return 0
 
 

@@ -14,11 +14,31 @@
 #   --max        nombre maximal de pages pour seo (environ), inventaire, liens, accessibilite et unlighthouse
 #   --voisins    domaines proches à tester dans bin/entetes
 #
+# bin/tout --liste-outils : une ligne par commande, dans l'ordre (nom, libellé et description
+# séparés par des tabulations) ; lu par l'interface graphique.
+#
 # Sortie : tous les sous-dossiers des outils, journal.txt, manifeste.json et synthese/synthese.pdf
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 OPTIONS="--sans --seulement --max --voisins"
-lire_arguments "$@"
 ORDRE=(entetes seo inventaire liens accessibilite lighthouse psi unlighthouse captures)
+declare -A LIBELLES=(  # commande → « libellé|description »
+  [entetes]="En-têtes et domaine|En-têtes de sécurité, redirections, certificat TLS, DNS et nom de domaine"
+  [seo]="Référencement|Exploration du site (liens, redirections, sitemap) et une quarantaine de contrôles SEO"
+  [inventaire]="Inventaire|Contenus, métadonnées, liens, poids des images et vidéos YouTube"
+  [liens]="Liens cassés|Liens internes et externes vérifiés avec lychee"
+  [accessibilite]="Accessibilité|Problèmes WCAG 2.1 AA page par page avec pa11y-ci et axe"
+  [lighthouse]="Lighthouse|Performance mesurée sur le poste, mobile et ordinateur, sur six pages types"
+  [psi]="PageSpeed Insights|Mesures chez Google et données de vrais visiteurs (clé API nécessaire)"
+  [unlighthouse]="Unlighthouse|Lighthouse sur toutes les pages du site"
+  [captures]="Captures d'écran|Pages types sur ordinateur (1366 px) et sur téléphone (390 px)"
+)
+if [ "${1:-}" = --liste-outils ]; then
+  for cmd in "${ORDRE[@]}"; do
+    l="${LIBELLES[$cmd]:-$cmd|}"; printf '%s\t%s\t%s\n' "$cmd" "${l%%|*}" "${l#*|}"
+  done
+  exit 0
+fi
+lire_arguments "$@"
 # noms de --sans et --seulement vérifiés avant de créer le dossier d'audit
 for opt in --sans --seulement; do
   OPTS[$opt]="${OPTS[$opt]:-}"; OPTS[$opt]="${OPTS[$opt]// /}"
@@ -29,8 +49,9 @@ for opt in --sans --seulement; do
   done
 done
 definir_dossier
+verrouiller_dossier                           # avant de toucher à .etats.tsv et au journal
 export KIT_AUDIT_DOSSIER="$DOSSIER_AUDIT"     # même dossier pour toutes les commandes, même après minuit
-SANS=",${OPTS[--sans]},"; SEULEMENT="${OPTS[--seulement]:+,${OPTS[--seulement]},}"
+SANS=",${OPTS[--sans]:-},"; SEULEMENT="${OPTS[--seulement]:+,${OPTS[--seulement]},}"
 JOURNAL="$DOSSIER_AUDIT/journal.txt"
 ETATS="$DOSSIER_AUDIT/.etats.tsv"; : > "$ETATS"
 journal "audit complet de $SITE_URL → $DOSSIER_AUDIT" 2>&1 | tee -a "$JOURNAL" >&2
@@ -39,8 +60,9 @@ lancer() {
   local cmd="$1"; shift
   local debut=$SECONDS
   journal "=== $cmd" 2>&1 | tee -a "$JOURNAL" >&2
-  "$KIT_RACINE/bin/$cmd" "$SITE_URL" "$@" 2>&1 | tee -a "$JOURNAL"
+  { "$KIT_RACINE/bin/$cmd" "$SITE_URL" "$@" 2>&1 | tee -a "$JOURNAL"; } 9>&-   # verrou non hérité (Chrome orphelin)
   local code=${PIPESTATUS[0]}
+  DERNIER_CODE=$code
   printf '%s\t%s\t%s\n' "$cmd" "$code" "$((SECONDS - debut))" >> "$ETATS"
   [ "$code" -eq 0 ] || journal "$cmd a échoué (code $code) ; on continue" 2>&1 | tee -a "$JOURNAL" >&2
 }
@@ -57,9 +79,10 @@ for cmd in "${ORDRE[@]}"; do
 done
 
 # Manifeste : outils lancés, codes de retour, durées et versions
-"$PYTHON" - "$DOSSIER_AUDIT" "$SITE_URL" <<'PY'
-import json, subprocess, sys
+"$PYTHON" - "$DOSSIER_AUDIT" "$SITE_URL" 9>&- <<'PY'
+import json, os, subprocess, sys
 from pathlib import Path
+from kit import version_navigateur
 d = Path(sys.argv[1])
 def version(*cmd):
     try:
@@ -76,7 +99,7 @@ try:
 except ImportError:
     adv = ""
 versions = {
-    "Chrome": version("google-chrome", "--version").replace("Google Chrome ", ""),
+    "Navigateur": version_navigateur(os.environ.get("CHROME_PATH", "")) or os.environ.get("CHROME_PATH", ""),
     "Lighthouse": version("lighthouse", "--version"), "Unlighthouse": (version("unlighthouse-ci", "--version").split("/")[-1].split() or [""])[0],
     "pa11y-ci": version("pa11y-ci", "--version"), "lychee": version("lychee", "--version").replace("lychee ", ""),
     "advertools": adv,
@@ -90,5 +113,9 @@ PY
 lancer synthese
 echecs="$(awk -F'\t' '$2 != 0' "$ETATS" | wc -l)"
 rm -f "$ETATS"
-journal "terminé : $DOSSIER_AUDIT/synthese/synthese.pdf" 2>&1 | tee -a "$JOURNAL" >&2
+if [ "$DERNIER_CODE" -eq 0 ]; then
+  journal "terminé : $DOSSIER_AUDIT/synthese/synthese.pdf" 2>&1 | tee -a "$JOURNAL" >&2
+else
+  journal "terminé sans nouvelle synthèse (échec de bin/synthese) : résultats dans $DOSSIER_AUDIT" 2>&1 | tee -a "$JOURNAL" >&2
+fi
 [ "$echecs" -eq 0 ] || { journal "$echecs commande(s) en échec (voir journal.txt)" 2>&1 | tee -a "$JOURNAL" >&2; exit 1; }

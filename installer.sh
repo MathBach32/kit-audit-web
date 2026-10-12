@@ -5,7 +5,7 @@
 #
 # Installe les dépendances du kit sans sudo et vérifie les prérequis du système.
 #   - outils Node (versions exactes de package-lock.json, sans télécharger de Chromium)
-#   - environnement Python .venv (advertools et versions figées de requirements.lock)
+#   - environnement Python .venv (versions figées et empreintes SHA-256 de requirements.txt)
 #   - lychee dans ~/.local/bin (release GitHub, somme SHA-256 vérifiée)
 #   - fichier des secrets ~/.config/audit-kit/secrets.env (créé vide, droits 600, s'il manque)
 #
@@ -33,8 +33,19 @@ for c in curl dig openssl python3 git; do
   command -v "$c" > /dev/null && ok "$c" || manque "$c (paquet : $c, ou bind9-dnsutils pour dig)"
 done
 python3 -c 'import venv, ensurepip' 2> /dev/null && ok "python3-venv" || manque "python3-venv (sudo apt install python3-venv)"
-CHROME="${CHROME_PATH:-/usr/bin/google-chrome}"
-[ -x "$CHROME" ] && ok "Chrome : $("$CHROME" --version)" || manque "Google Chrome ($CHROME) : https://www.google.com/chrome/"
+# Navigateur : même détection que les commandes du kit (lib/kit.py), CHROME_PATH pour en imposer un
+if CHROME="$(python3 lib/kit.py navigateur 2> /dev/null)"; then
+  VERSION_CHROME="$(python3 lib/kit.py version-navigateur "$CHROME")"
+  ok "Navigateur : ${VERSION_CHROME:-version inconnue} ($CHROME)"
+  [ "${KIT_NAVIGATEUR_LIBRE:-}" = 1 ] && [ -n "${CHROME_PATH:-}" ] && info "KIT_NAVIGATEUR_LIBRE=1 : navigateur imposé accepté sans contrôle de version"
+  # Snap : repéré par sa version (« … snap », même derrière le script chromium-browser) ou par son chemin
+  CHROME_REEL="$(readlink -f "$CHROME")"
+  if [[ "$VERSION_CHROME" == *" snap" || "$CHROME_REEL" == */snap || "$CHROME_REEL" == /snap/* ]]; then
+    info "Chromium en snap : pas d'accès aux dossiers cachés de \$HOME ni au /tmp de l'hôte ; garder les résultats sous \$HOME, hors dossier caché (défaut : ${KIT_AUDIT_RESULTATS:-$PWD/resultats})"
+  fi
+else
+  manque "navigateur : $(python3 lib/kit.py navigateur 2>&1 > /dev/null)"
+fi
 if command -v node > /dev/null && version_ge "$(node --version | tr -d v)" "$NODE_MIN"; then
   ok "Node $(node --version)"
 else
@@ -56,7 +67,7 @@ done
 
 if [ "$VERIFIER" = 0 ]; then
   [ -x .venv/bin/python ] || python3 -m venv .venv
-  .venv/bin/pip install -q --upgrade pip && .venv/bin/pip install -q -r requirements.lock && ok "environnement Python installé" || manque "installation Python"
+  .venv/bin/pip install -q --upgrade pip && .venv/bin/pip install -q --require-hashes -r requirements.txt && ok "environnement Python installé" || manque "installation Python"
 fi
 .venv/bin/python -c 'import advertools' 2> /dev/null && ok "advertools $(.venv/bin/python -c 'import advertools; print(advertools.__version__)')" || manque "advertools (lancer ./installer.sh)"
 
