@@ -22,6 +22,9 @@ IMPACTS_FR = {"critical": "critique", "serious": "grave", "moderate": "modéré"
               "info": "à vérifier"}
 # Règles qui signalent une limite du test plutôt qu'un défaut : frame-tested = contenu d'une iframe
 # (vidéo, publicité, formulaire externe) que axe n'a pas pu analyser ; à vérifier à la main.
+# De même, les cas qu'axe n'a pas pu trancher (needsFurtherReview : texte sur une image, éléments
+# superposés, flèche décorative) : pa11y les remonte comme des erreurs, ce ne sont pas des défauts
+# constatés.
 REGLES_INFORMATIVES = {"frame-tested"}
 
 
@@ -57,7 +60,8 @@ def resume(dossier):
                 echecs.append({"page": page, "message": i.get("message", str(i))})
                 continue
             extra = i.get("runnerExtras") or {}
-            impact = "info" if i["code"] in REGLES_INFORMATIVES else (extra.get("impact") or "")
+            a_trancher = i["code"] in REGLES_INFORMATIVES or extra.get("needsFurtherReview")
+            impact = "info" if a_trancher else (extra.get("impact") or "")
             problemes.append({"page": page, "regle": i["code"], "impact": impact,
                               "description": extra.get("help") or extra.get("description") or i.get("message", ""),
                               "selecteur": i.get("selector", ""), "extrait": (i.get("context") or "")[:300],
@@ -69,8 +73,8 @@ def resume(dossier):
         w.writerows(problemes)
 
     regles = defaultdict(lambda: {"pages": set(), "occurrences": 0})
-    for p in problemes:
-        g = regles[p["regle"]]
+    for p in problemes:  # une ligne par règle et par gravité : défauts constatés et cas à vérifier à part
+        g = regles[(p["regle"], p["impact"])]
         g.update(impact=p["impact"], description=p["description"], aide=p["aide"])
         g["pages"].add(p["page"])
         g["occurrences"] += 1
@@ -78,14 +82,14 @@ def resume(dossier):
     with open(d / "regles.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["regle", "impact", "pages", "occurrences", "description", "aide"])
-        for code, g in tri:
+        for (code, _), g in tri:
             w.writerow([code, IMPACTS_FR.get(g["impact"], g["impact"]), len(g["pages"]), g["occurrences"], g["description"], g["aide"]])
 
     pages = set((r.get("results") or {}).keys())
     synthese = {
         "pages_testees": len(pages), "pages_en_echec": len({e["page"] for e in echecs}),
         "pages_sans_probleme": len(pages - {p["page"] for p in problemes} - {e["page"] for e in echecs}),
-        "problemes": len(problemes), "regles": len(regles),
+        "problemes": len(problemes), "regles": len({code for code, _ in regles}),
         "par_impact": {IMPACTS_FR[k]: sum(1 for p in problemes if p["impact"] == k) for k in IMPACTS},
         "echecs": echecs,
     }
