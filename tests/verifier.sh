@@ -25,6 +25,9 @@ for _ in $(seq 50); do curl -sf -o /dev/null "http://127.0.0.1:$PORT/" && break;
 echo "site témoin : http://127.0.0.1:$PORT/ ; audit dans $TRAVAIL/audit"
 "$RACINE/bin/tout" "http://127.0.0.1:$PORT/" --sans psi --dossier "$TRAVAIL/audit" > "$TRAVAIL/tout.log" 2>&1
 echo "bin/tout : code $? (journal : $TRAVAIL/tout.log)"
+# Relance partielle (comme « relancer un outil » dans l'interface) : le manifeste garde les autres outils
+"$RACINE/bin/tout" "http://127.0.0.1:$PORT/" --seulement liens --dossier "$TRAVAIL/audit" > "$TRAVAIL/relance.log" 2>&1
+echo "bin/tout --seulement liens : code $? (journal : $TRAVAIL/relance.log)"
 PYTHONPATH="$RACINE/lib" "$PYTHON" "$RACINE/tests/attendus.py" "$TRAVAIL/audit"
 code=$?
 if [ "$code" -eq 0 ] && [ "$GARDER" = 0 ]; then rm -rf "$TRAVAIL"; else echo "résultats conservés : $TRAVAIL"; fi
