@@ -8,24 +8,45 @@
 # Petit serveur web local (lib/interface.py) ouvert dans une fenêtre d'application du navigateur
 # du kit ($CHROME_PATH --app, profil dédié dans ~/.cache/kit-audit-web/interface), sinon xdg-open.
 #
-# Usage : bin/interface [--port N] [--sans-navigateur]
+# Usage : bin/interface [--port N] [--sans-navigateur | --lanceur]
 #   --port             premier port essayé (défaut 8710 ; s'il est pris, le suivant libre), sur une
 #                      adresse de bouclage 127.x.y.z tirée au hasard à chaque lancement
 #   --sans-navigateur  n'ouvre aucune fenêtre : l'adresse est seulement affichée
+#   --lanceur          mode de l'entrée du menu (outils/lanceur.sh) : arrêt à la fermeture de la
+#                      dernière fenêtre (à la fin de l'audit en cours s'il y en a un, signalée par une
+#                      notification), sortie dans ~/.cache/kit-audit-web/interface.log, notification
+#                      si l'interface s'arrête sur une erreur
 #
+# Une seule interface par compte : relancée alors qu'elle tourne, elle y ouvre une nouvelle fenêtre
+# (sauf --sans-navigateur, qui démarre une interface indépendante).
 # L'adresse affichée contient un jeton d'accès valable jusqu'à l'arrêt : ne pas la partager.
 # Ctrl+C arrête l'interface, et l'audit en cours s'il y en a un.
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 port=8710
 options=()
+lanceur=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) aide; exit 0 ;;
     --port) [ $# -ge 2 ] || echec "valeur manquante pour --port"; port="$2"; shift 2 ;;
     --port=*) port="${1#*=}"; shift ;;
     --sans-navigateur) options+=(--sans-navigateur); shift ;;
+    --lanceur) lanceur=1; options+=(--lanceur); shift ;;
     *) echec "argument inattendu : $1 (voir --help)" ;;
   esac
 done
 [[ "$port" =~ ^[0-9]{4,5}$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || echec "port invalide : $port (1024 à 65535)"
+if [ "$lanceur" = 1 ]; then
+  # Pas de terminal : journal privé (l'adresse y figure sans jeton) et notification en cas d'échec
+  journal_lanceur="${XDG_CACHE_HOME:-$HOME/.cache}/kit-audit-web/interface.log"
+  mkdir -p "$(dirname "$journal_lanceur")"
+  [ "$(stat -c %s "$journal_lanceur" 2> /dev/null || echo 0)" -lt 1000000 ] || mv -f "$journal_lanceur" "$journal_lanceur.1"
+  umask 077
+  echo "=== $(date '+%F %T')" >> "$journal_lanceur"
+  "$PYTHON" -m interface --port "$port" "${options[@]}" >> "$journal_lanceur" 2>&1 && exit 0
+  code=$?
+  command -v notify-send > /dev/null && notify-send -a "Kit d'audit web" -i "$KIT_RACINE/interface/icone.svg" \
+    "Kit d'audit web" "L'interface s'est arrêtée sur une erreur (code $code). Détails : $journal_lanceur"
+  exit "$code"
+fi
 exec "$PYTHON" -m interface --port "$port" "${options[@]}"
