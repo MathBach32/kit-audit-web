@@ -141,6 +141,11 @@ class Verification:
         r = self.lire_json("liens/resume.json")
         casses = {urllib.parse.urlsplit(l["lien"]).path for l in self.lire_csv("liens/liens_casses.csv")}
         self.exiger("/page-absente.html" in casses, f"liens : /page-absente.html absent des liens cassés ({sorted(casses)})")
+        a_verifier = {urllib.parse.urlsplit(l["lien"]).path: l["famille"] for l in self.lire_csv("liens/a_verifier.csv")}
+        # 429 : refus temporaire « à vérifier », pas un lien cassé ; défi par cookie : franchi grâce à la boîte à cookies
+        self.exiger("/surcharge.xml" not in casses and "refus temporaire" in a_verifier.get("/surcharge.xml", ""),
+                    f"liens : /surcharge.xml (429) devrait être un refus temporaire à vérifier ({a_verifier.get('/surcharge.xml')})")
+        self.exiger("/defi.xml" not in casses and "/defi.xml" not in a_verifier, "liens : le défi par cookie de /defi.xml n'a pas été franchi")
         # la page de redirection meta refresh n'a aucun lien à vérifier
         self.exiger(r.get("pages_analysees") == PAGES_200 - 1, f"liens : {r.get('pages_analysees')} pages analysées au lieu de {PAGES_200 - 1}")
         self.exiger(r.get("redirections", 0) >= 2, f"liens : {r.get('redirections')} redirection(s) au lieu d'au moins 2")
