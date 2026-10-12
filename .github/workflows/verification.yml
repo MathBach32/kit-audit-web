@@ -40,7 +40,7 @@ jobs:
         with:
           python-version-file: .python-version
       - name: Outils du système
-        run: sudo apt-get update -q && sudo apt-get install -yq bind9-dnsutils poppler-utils fonts-noto-core
+        run: sudo apt-get update -q && sudo apt-get install -yq bind9-dnsutils poppler-utils fonts-noto-core desktop-file-utils
       - name: Navigateur
         run: tests/navigateur-ci.sh "${{ matrix.navigateur }}" >> "$GITHUB_ENV"
       - name: Installation du kit
