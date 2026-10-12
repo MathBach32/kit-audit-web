@@ -39,6 +39,33 @@
   },
   "packageRules": [
     {
+      "description": "Messages en français pour toutes les mises à jour (remplace les textes propres à chaque gestionnaire)",
+      "matchDepNames": [
+        "*"
+      ],
+      "commitMessageAction": "Mise à jour de",
+      "commitMessageTopic": "{{depName}}",
+      "commitMessageExtra": "vers {{#if isPinDigest}}{{{newDigestShort}}}{{else}}{{#if isMajor}}la version {{{newMajor}}}{{else}}{{#if newValue}}{{{newValue}}}{{else}}{{{newDigestShort}}}{{/if}}{{/if}}{{/if}}"
+    },
+    {
+      "description": "Épinglage d'une version ou d'une empreinte",
+      "matchUpdateTypes": [
+        "pin",
+        "pinDigest"
+      ],
+      "commitMessageAction": "Épinglage de",
+      "commitMessageExtra": "{{#if newDigestShort}}sur {{{newDigestShort}}}{{else}}sur {{{newValue}}}{{/if}}"
+    },
+    {
+      "description": "Rafraîchissement mensuel des verrous (npm et pip-compile)",
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ],
+      "commitMessageAction": "Rafraîchissement",
+      "commitMessageTopic": "des fichiers de verrouillage",
+      "commitMessageExtra": ""
+    },
+    {
       "description": "Petites mises à jour : intégrées automatiquement dès que la vérification passe",
       "matchUpdateTypes": [
         "minor",

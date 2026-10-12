@@ -31,4 +31,5 @@ jobs:
           RENOVATE_ONBOARDING: "false"
           RENOVATE_REQUIRE_CONFIG: "required"
           RENOVATE_PLATFORM_COMMIT: "enabled"
+          RENOVATE_GIT_AUTHOR: "Renovate (MathBach32) <225357960+MathBach32@users.noreply.github.com>"
           RENOVATE_ALLOWED_COMMANDS: '["^outils/maj-lychee\\.sh$", "^outils/maj-seonaut\\.sh$"]'
