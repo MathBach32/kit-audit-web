@@ -75,6 +75,18 @@ definir_dossier() {
   export SITE_URL SITE_DOMAINE DOSSIER_AUDIT
 }
 
+# verrouiller_dossier : un seul bin/tout ou bin/synthese à la fois par dossier d'audit (ligne de
+# commande ou interface graphique). Verrou flock sur <dossier>/.verrou, tenu par le descripteur 9
+# jusqu'à la fin du script ; bin/tout le ferme pour les commandes qu'il lance (9>&-), et
+# KIT_AUDIT_VERROU dit à bin/synthese que son parent le tient déjà.
+verrouiller_dossier() {
+  [ "${KIT_AUDIT_VERROU:-}" = "$DOSSIER_AUDIT" ] && return 0
+  command -v flock > /dev/null || { journal "attention : flock introuvable, dossier d'audit non verrouillé"; return 0; }
+  exec 9> "$DOSSIER_AUDIT/.verrou"
+  flock -w 3 9 || echec "un audit est déjà en cours dans $DOSSIER_AUDIT : attendre sa fin"
+  export KIT_AUDIT_VERROU="$DOSSIER_AUDIT"
+}
+
 # preparer_sortie OUTIL : definir_dossier, puis SORTIE=<dossier d'audit>/OUTIL (vidé s'il existait).
 preparer_sortie() {
   local outil="$1"

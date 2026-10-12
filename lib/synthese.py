@@ -13,6 +13,7 @@ import datetime as dt
 import html
 import json
 import re
+import shutil
 import subprocess
 import sys
 import urllib.parse
@@ -462,26 +463,40 @@ selon des seuils usuels ; le détail et les données brutes suivent.</p></div>
 def principal(dossier):
     d = Path(dossier)
     s = Synthese(d)
-    sortie = d / "synthese"
-    sortie.mkdir(exist_ok=True)
-    page = sortie / "synthese.html"
+    # Produite dans un dossier voisin (même profondeur, pour les liens « ../captures/ »), puis mise
+    # à la place de synthese/ seulement si le PDF existe : un échec garde la synthèse précédente.
+    sortie, nouvelle, ancienne = d / "synthese", d / ".synthese-nouvelle", d / ".synthese-ancienne"
+    shutil.rmtree(nouvelle, ignore_errors=True)
+    nouvelle.mkdir()
+    page = nouvelle / "synthese.html"
     page.write_text(s.html(), encoding="utf-8")
-    pdf = sortie / "synthese.pdf"
+    # voyants et chiffres clés pour l'interface graphique
+    (nouvelle / "voyants.json").write_text(json.dumps({
+        "site": s.site, "date": s.date,
+        "voyants": [{"domaine": d, "couleur": c, "etat": e, "texte": x} for d, c, e, x in s.voyants],
+        "chiffres": [{"valeur": v, "libelle": l} for v, l in s.chiffres[:8]]}, ensure_ascii=False, indent=1), encoding="utf-8")
+    pdf = nouvelle / "synthese.pdf"
+    reste = lambda: "synthèse précédente conservée" if (sortie / "synthese.pdf").is_file() else "aucune synthèse produite"
     if not CHROME:
-        print(f"{page} produit, PDF impossible : {sans_navigateur()}", file=sys.stderr)
+        shutil.rmtree(nouvelle, ignore_errors=True)
+        print(f"ERREUR : PDF impossible : {sans_navigateur()} ; {reste()}.", file=sys.stderr)
         return 1
-    pdf.unlink(missing_ok=True)
     try:
         subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--no-pdf-header-footer", "--allow-file-access-from-files",
                         f"--print-to-pdf={pdf}", page.as_uri()], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if not pdf.is_file() or not pdf.stat().st_size:
+            raise OSError("fichier PDF absent ou vide")
     except (OSError, subprocess.CalledProcessError) as e:
-        detail = f"code {e.returncode}" if isinstance(e, subprocess.CalledProcessError) else e.strerror
-        print(f"{page} produit, PDF impossible : {CHROME} a échoué ({detail})", file=sys.stderr)
+        shutil.rmtree(nouvelle, ignore_errors=True)
+        detail = f"code {e.returncode}" if isinstance(e, subprocess.CalledProcessError) else (e.strerror or str(e))
+        print(f"ERREUR : PDF non produit par {CHROME} ({detail}) ; {reste()}.", file=sys.stderr)
         return 1
-    if not pdf.is_file() or not pdf.stat().st_size:
-        print(f"{page} produit, PDF impossible : {CHROME} n'a rien écrit", file=sys.stderr)
-        return 1
-    print(f"→ {page}\n→ {pdf}")
+    shutil.rmtree(ancienne, ignore_errors=True)
+    if sortie.exists():
+        sortie.rename(ancienne)
+    nouvelle.rename(sortie)
+    shutil.rmtree(ancienne, ignore_errors=True)
+    print(f"→ {sortie / page.name}\n→ {sortie / pdf.name}")
     return 0
 
 
