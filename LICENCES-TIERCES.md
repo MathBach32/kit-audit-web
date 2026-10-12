@@ -42,6 +42,9 @@ descriptions dans les résultats de recherche. Le fichier ne contient que ces me
 
 ## Outils utilisés sans être inclus
 
+Le navigateur n'est pas fourni : Google Chrome (logiciel propriétaire gratuit de Google) ou Chromium
+(projet libre dont Chrome est dérivé, sous licence BSD à 3 clauses pour l'essentiel), au choix.
+
 Les outils appelés par le kit sont installés séparément, chacun sous sa propre licence :
 Lighthouse (Apache-2.0), Unlighthouse (MIT), pa11y-ci (LGPL-3.0), lychee (Apache-2.0 ou MIT),
 advertools (MIT), MariaDB (GPL-2.0, image Docker officielle).

@@ -14,13 +14,38 @@ Origine : scripts écrits pour un audit réel de site (octobre 2026), puis gén�
 ./installer.sh --verifier   # contrôle seulement
 ```
 
-Prérequis du système : Google Chrome ou Chromium (chemin à indiquer dans `CHROME_PATH`), Node ≥
-22.19, Python 3 avec `venv`, `curl`, `dig`, `openssl`. Facultatif : `docker buildx` (pour
-construire l'image SEOnaut).
+Prérequis du système : Google Chrome ou Chromium (voir [Navigateur](#navigateur)), Node ≥ 22.19,
+Python 3 avec `venv`, `curl`, `dig`, `openssl`. Facultatif : `docker buildx` (pour construire
+l'image SEOnaut).
 
 La clé PageSpeed Insights se range **hors du dépôt**, dans `~/.config/audit-kit/secrets.env`
 (droits 600) : `PSI_API_KEY=…`. Elle est lue sans exécuter le fichier, et transmise dans un en-tête
 HTTP : elle n'apparaît ni dans les URL, ni dans la liste des processus, ni dans les journaux.
+
+## Navigateur
+
+Le kit fonctionne avec **Google Chrome ou Chromium**, au choix. Ce sont deux logiciels distincts :
+Chrome est construit par Google à partir de Chromium, mais n'installe pas de commande `chromium`.
+L'un ou l'autre suffit.
+
+Le navigateur est détecté automatiquement (`lib/kit.py`), dans cet ordre : `google-chrome-stable`,
+`google-chrome`, `chromium`, `/snap/bin/chromium`, `chromium-browser`, `/usr/lib/chromium/chromium`,
+`/opt/google/chrome/chrome`. Un candidat n'est retenu que s'il répond à `--version` par une version
+de Chrome ou de Chromium : sur Ubuntu, `chromium-browser` peut n'être qu'un script qui propose
+d'installer le snap, ou qui renvoie vers lui. `./installer.sh` affiche le navigateur retenu, et
+`manifeste.json` (clé « Navigateur ») celui de chaque audit ; le Chromium du snap s'y signale par sa
+version (« Chromium … snap »).
+
+Pour en imposer un : `CHROME_PATH=/chemin/du/navigateur bin/tout exemple.fr`. Le chemin imposé est
+utilisé tel quel : s'il n'est pas exécutable, ou s'il ne répond pas à `--version` comme Google Chrome
+ou Chromium, les commandes s'arrêtent au lieu de se rabattre sur un autre navigateur. Pour un autre
+navigateur de la famille Chromium (Brave, Microsoft Edge…), non testé avec le kit, ajouter
+`KIT_NAVIGATEUR_LIBRE=1` : le chemin imposé est alors accepté sans contrôle de version.
+
+Chromium en **snap** (Ubuntu) est confiné : il ne voit ni les dossiers cachés de `$HOME`, ni le
+`/tmp` de l'hôte. Les captures et le PDF de synthèse, écrits par le navigateur lui-même, doivent donc
+rester sous `$HOME`, hors dossier caché : c'est le cas par défaut quand le kit y est installé. Ne pas
+diriger `KIT_AUDIT_RESULTATS` ni `--dossier` vers `/tmp`.
 
 ## Interface graphique
 
@@ -82,8 +107,8 @@ d'audit imposé), et selon les commandes `--pages FICHIER` (liste d'URL) et `--m
 | `lighthouse` | Lighthouse 13.5.0 | mesures locales, mobile et ordinateur, sur 6 pages types |
 | `psi` | API PageSpeed Insights | mêmes mesures chez Google, plus les données de vrais visiteurs (CrUX) si elles existent |
 | `unlighthouse` | Unlighthouse 0.19.0 | Lighthouse sur toutes les pages, rapport consultable |
-| `captures` | Chrome headless | captures ordinateur (1366 px) et mobile (390 px) des pages types |
-| `synthese` | Python + Chrome | `synthese/synthese.html` et `synthese.pdf` |
+| `captures` | navigateur sans interface | captures ordinateur (1366 px) et mobile (390 px) des pages types |
+| `synthese` | Python + navigateur | `synthese/synthese.html` et `synthese.pdf` |
 
 Les pages types sont l'accueil, les quatre pages les moins profondes du sitemap et une page
 profonde (un article, en général). Les commandes qui parcourent tout le site réutilisent la liste
@@ -144,14 +169,14 @@ sous-dossier.
   construit dans le navigateur doit être audité avec les outils fondés sur Chrome (Lighthouse,
   Unlighthouse, pa11y).
 - Ne pas créer ni supprimer de réseaux Docker (`docker compose up/down`) pendant un audit :
-  Chrome interrompt alors ses chargements (`ERR_NETWORK_CHANGED`), ce qui fausse Lighthouse,
+  le navigateur interrompt alors ses chargements (`ERR_NETWORK_CHANGED`), ce qui fausse Lighthouse,
   Unlighthouse et pa11y.
 - La règle axe `frame-tested` est classée « à vérifier » : elle signale une iframe (vidéo,
   publicité) que le test n'a pas pu analyser, pas un défaut.
 - Dépendances : `package.json` force des versions corrigées de `basic-ftp` et `esbuild`
   (`overrides`). Reste `extract-zip` (alerte élevée, aucun correctif publié) : Puppeteer ne s'en
   sert que pour télécharger un navigateur, ce que le kit désactive (`PUPPETEER_SKIP_DOWNLOAD`,
-  Chrome du système) ; il n'est donc jamais appelé. Même chose pour `node-forge` (alerte élevée,
+  navigateur du système) ; il n'est donc jamais appelé. Même chose pour `node-forge` (alerte élevée,
   sans correctif) : il ne sert qu'au serveur de développement d'Unlighthouse (`listhen`, certificats
   de test), alors que le kit n'utilise que le mode CI (`unlighthouse-ci`).
 - Les voyants de la synthèse sont calculés selon des seuils usuels : ils orientent, ils ne

@@ -80,8 +80,9 @@ done
 
 # Manifeste : outils lancés, codes de retour, durées et versions
 "$PYTHON" - "$DOSSIER_AUDIT" "$SITE_URL" 9>&- <<'PY'
-import json, subprocess, sys
+import json, os, subprocess, sys
 from pathlib import Path
+from kit import version_navigateur
 d = Path(sys.argv[1])
 def version(*cmd):
     try:
@@ -98,7 +99,7 @@ try:
 except ImportError:
     adv = ""
 versions = {
-    "Chrome": version("google-chrome", "--version").replace("Google Chrome ", ""),
+    "Navigateur": version_navigateur(os.environ.get("CHROME_PATH", "")) or os.environ.get("CHROME_PATH", ""),
     "Lighthouse": version("lighthouse", "--version"), "Unlighthouse": (version("unlighthouse-ci", "--version").split("/")[-1].split() or [""])[0],
     "pa11y-ci": version("pa11y-ci", "--version"), "lychee": version("lychee", "--version").replace("lychee ", ""),
     "advertools": adv,

@@ -47,14 +47,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import metadata
 from pathlib import Path
 
-from kit import domaine, normaliser_url
+from kit import domaine, normaliser_url, navigateur
 
 RACINE = Path(__file__).resolve().parents[1]
 PAGES = RACINE / "interface"
 STATIQUES = {"/interface.css": "text/css; charset=utf-8", "/interface.js": "text/javascript; charset=utf-8"}
 RESULTATS = Path(os.environ.get("KIT_AUDIT_RESULTATS") or RACINE / "resultats").resolve()
 SECRETS = Path(os.environ.get("KIT_AUDIT_SECRETS") or Path.home() / ".config/audit-kit/secrets.env")
-CHROME = os.environ.get("CHROME_PATH", "/usr/bin/google-chrome")
+CHROME = os.environ.get("CHROME_PATH") or navigateur()  # lib/commun.sh l'a déjà détecté ; repli si lancé seul
 PROFIL = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "kit-audit-web/interface"
 PORTS_ESSAYES = 20
 CONNEXIONS_MAX = 64         # connexions traitées en même temps ; au-delà, fermées aussitôt

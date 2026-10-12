@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: EUPL-1.2
 #
 # Synthèse de l'audit : lit les résultats présents dans le dossier d'audit et produit un document
-# HTML puis PDF (Chrome headless). Les outils non exécutés sont signalés sans bloquer.
+# HTML puis PDF (navigateur sans interface : Google Chrome ou Chromium). Les outils non exécutés
+# sont signalés sans bloquer.
 #
 # Usage : bin/synthese URL [--dossier DOSSIER]
 #   (le dossier d'audit par défaut est celui du jour : resultats/<domaine>/<AAAA-MM-JJ>)
@@ -13,7 +14,7 @@
 # la synthèse précédente est gardée telle quelle.
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 lire_arguments "$@"
-exiger "$CHROME_PATH"
+exiger_navigateur
 definir_dossier
 verrouiller_dossier
 [ -s "$DOSSIER_AUDIT/site.txt" ] || echo "$SITE_URL" > "$DOSSIER_AUDIT/site.txt"
