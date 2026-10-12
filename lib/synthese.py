@@ -289,9 +289,16 @@ class Synthese:
             if len(rangees) > 40:
                 contenu += f'<p class="petit">… et {len(rangees) - 40} autres : voir liens/liens_casses.csv.</p>'
         if a_verifier:
-            contenu += ("<h3>À vérifier dans un navigateur</h3><p>Ces services bloquent les robots ; leurs liens n'ont pas été "
-                        "vérifiés automatiquement (liste dans config/lychee.toml, détail dans liens/a_verifier.csv) :</p>"
+            contenu += ("<h3>À vérifier dans un navigateur</h3><p>Ces liens n'ont pas pu être vérifiés automatiquement : services "
+                        "qui bloquent les robots (liste dans config/lychee.toml) ou refus temporaires du serveur. Détail dans "
+                        "liens/a_verifier.csv :</p>"
                         + tableau(["Famille de liens", "#Adresses distinctes"], [[d, n] for d, n in a_verifier.most_common(20)]))
+            if r.get("refus_temporaires"):
+                contenu += (f'<p class="petit">{r["refus_temporaires"]} adresse(s) refusée(s) temporairement par le serveur '
+                            "(protection contre les robots ou surcharge) : relancer bin/liens plus tard pour les vérifier.</p>")
+        if r.get("pages_non_verifiees"):
+            contenu += (f'<p class="petit">{len(r["pages_non_verifiees"])} page(s) refusée(s) par le serveur pendant la '
+                        "vérification : leurs liens n'ont pas été vérifiés (liste dans liens/pages_non_verifiees.txt).</p>")
         couleur = "rouge" if r["liens_casses_internes"] else "orange" if r["liens_casses"] > 2 else "vert"
         self.voyant("Liens", couleur, f"{r['liens_casses']} lien(s) cassé(s) dont {r['liens_casses_internes']} interne(s) ; "
                                       f"{r['a_verifier_navigateur']} à vérifier à la main.")

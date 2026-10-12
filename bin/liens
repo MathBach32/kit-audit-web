@@ -11,6 +11,11 @@
 #   --pages  pages à analyser (défaut : pages HTML trouvées par bin/seo, sinon le sitemap)
 #   --max    nombre maximal de pages
 #
+# Les refus temporaires du serveur (redirection non aboutie, 429, 503 : protection contre les
+# robots, surcharge) ne sont pas comptés comme liens cassés mais « à vérifier ». Si lychee est
+# interrompu (page d'entrée refusée par le serveur), il est relancé une fois, plus lentement, puis
+# page par page : seules les pages refusées manquent alors (liens/pages_non_verifiees.txt).
+#
 # Sortie : liens/lychee.json, liens_casses.csv, a_verifier.csv, resume.json
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 OPTIONS="--pages --max"
@@ -18,9 +23,35 @@ lire_arguments "$@"
 exiger lychee
 preparer_sortie liens
 pages="$(pages_a_auditer)"
-lychee --config "$KIT_RACINE/config/lychee.toml" --user-agent "$KIT_UA" --files-from "$pages" \
-  --format json --output "$SORTIE/lychee.json" -v < /dev/null 2> "$SORTIE/journal.txt"
+# lychee [options…] : relevé des liens ; les cookies de défi des protections anti-robots sont conservés
+verifier() {
+  lychee --config "$KIT_RACINE/config/lychee.toml" --user-agent "$KIT_UA" --files-from "$pages" \
+    --cookie-jar "$SORTIE/cookies.json" --format json --output "$SORTIE/lychee.json" -v "$@" < /dev/null 2>> "$SORTIE/journal.txt"
+}
+verifier
 code=$?
+if [ "$code" -eq 1 ]; then
+  journal "lychee interrompu (voir journal.txt) : nouvel essai dans 60 s, une requête par seconde et par hôte"
+  sleep 60
+  echo "=== nouvel essai, plus lent" >> "$SORTIE/journal.txt"
+  verifier --host-concurrency 1 --host-request-interval 1s
+  code=$?
+fi
+if [ "$code" -eq 1 ]; then
+  journal "lychee encore interrompu : vérification page par page"
+  mkdir -p "$SORTIE/par-page"; n=0
+  while read -r page; do
+    n=$((n + 1))
+    echo "=== page $n : $page" >> "$SORTIE/journal.txt"
+    (cd "$SORTIE" && lychee --config "$KIT_RACINE/config/lychee.toml" --user-agent "$KIT_UA" --cache \
+      --cookie-jar "$SORTIE/cookies.json" --host-concurrency 1 --host-request-interval 1s \
+      --format json --output "$SORTIE/par-page/$n.json" -v "$page" < /dev/null 2>> "$SORTIE/journal.txt")
+    [ -s "$SORTIE/par-page/$n.json" ] || echo "$page" >> "$SORTIE/pages_non_verifiees.txt"
+  done < <(grep -v '^\s*\(#\|$\)' "$pages")
+  "$PYTHON" -m liens_resume fusionner "$SORTIE"
+  code=$?
+  [ -s "$SORTIE/pages_non_verifiees.txt" ] && journal "$(wc -l < "$SORTIE/pages_non_verifiees.txt") page(s) refusée(s) par le serveur, non vérifiée(s) : liens/pages_non_verifiees.txt"
+fi
 # lychee renvoie 2 quand il trouve des liens cassés : ce n'est pas une panne
 [ "$code" -le 2 ] && [ -s "$SORTIE/lychee.json" ] || echec "lychee a échoué (code $code, voir journal.txt)"
 "$PYTHON" -m liens_resume "$SORTIE" "$SITE_URL"

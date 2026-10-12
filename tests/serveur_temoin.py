@@ -17,7 +17,8 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent / "site-temoin"
 REDIRECTIONS = {"/ancienne-page": "/actualites.html", "/Page_Ancienne.html": "/a-propos/",
                 "/se-connecter": "/wp-login.php?redirect_to=%2F"}   # destination exclue (config/exclusions_pages.txt)
-ERREURS = {"/erreur-serveur": 500}
+ERREURS = {"/erreur-serveur": 500, "/surcharge.xml": 429}   # 429 : serveur qui refuse les robots
+DEFI = "/defi.xml"   # protection anti-robots : 307 vers elle-même avec un cookie, puis 200
 DELAIS = {"/lente.html": 2.0}
 ENTETES = {"/x-robots.html": {"X-Robots-Tag": "noindex"}}
 TYPES = {".html": "text/html; charset=utf-8", ".xml": "application/xml", ".txt": "text/plain; charset=utf-8",
@@ -42,6 +43,16 @@ class Gestionnaire(SimpleHTTPRequestHandler):
             self.send_header("Location", REDIRECTIONS[chemin])
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if chemin == DEFI and "defi=ok" not in self.headers.get("Cookie", ""):
+            self.send_response(307)
+            self.send_header("Location", DEFI)
+            self.send_header("Set-Cookie", "defi=ok; Path=/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if chemin == DEFI:
+            self.envoyer(200, "application/rss+xml", b"<rss version=\"2.0\"></rss>\n", corps)
             return
         if chemin in ERREURS:
             self.envoyer(ERREURS[chemin], "text/html; charset=utf-8", b"<!doctype html><title>Erreur</title><h1>Erreur</h1>", corps)

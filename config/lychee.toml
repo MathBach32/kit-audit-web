@@ -3,10 +3,13 @@
 # SPDX-License-Identifier: EUPL-1.2
 #
 # Configuration de lychee pour bin/liens (https://lychee.cli.rs/).
-# Réglages de courtoisie : peu de requêtes simultanées par hôte, nouvelles tentatives espacées.
+# Réglages de courtoisie : peu de requêtes simultanées par hôte, au moins 250 ms entre deux requêtes
+# vers un même hôte, nouvelles tentatives espacées. Plus rapide, lychee déclenche les protections
+# contre les robots de certains hébergeurs (réponses 307, 429 ou 503 en rafale).
 
 max_concurrency = 8
 host_concurrency = 2
+host_request_interval = "250ms"
 max_retries = 2
 retry_wait_time = 2
 timeout = 20

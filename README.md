@@ -165,6 +165,12 @@ sous-dossier.
 ## Limites connues
 
 - Les tests automatiques d'accessibilité ne trouvent qu'une partie des problèmes.
+- Certains hébergeurs protègent leurs sites contre les robots trop rapides : ils répondent alors par
+  des redirections sans fin (307), des 429 ou des 503. `bin/liens` limite donc son débit (deux
+  requêtes simultanées et au moins 250 ms d'écart par hôte), garde les cookies de ces protections,
+  et classe ces refus « à vérifier » plutôt que « cassés ». S'il est interrompu, il réessaie une
+  minute plus tard, plus lentement, puis page par page ; les pages refusées sont listées dans
+  `liens/pages_non_verifiees.txt`.
 - `bin/seo` lit le HTML envoyé par le serveur, sans exécuter le JavaScript : un site entièrement
   construit dans le navigateur doit être audité avec les outils fondés sur Chrome (Lighthouse,
   Unlighthouse, pa11y).
