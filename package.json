@@ -5,12 +5,15 @@
   "description": "Outils Node du kit d'audit web (versions exactes, installés par installer.sh avec PUPPETEER_SKIP_DOWNLOAD=1 : Chrome du système)",
   "license": "EUPL-1.2",
   "dependencies": {
-    "@unlighthouse/cli": "0.19.0",
+    "@unlighthouse/cli": "0.19.1",
     "lighthouse": "13.5.0",
-    "pa11y-ci": "4.1.1"
+    "pa11y-ci": "5.0.0"
   },
   "overrides": {
     "basic-ftp": "6.2.1",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "@lhci/utils": {
+      "lighthouse": "$lighthouse"
+    }
   }
 }
