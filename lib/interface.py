@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: EUPL-1.2
 """Interface graphique du kit : petit serveur web local, bibliothèque standard seulement.
 
-  python3 -m interface [--port N] [--sans-navigateur]   (lancé par bin/interface)
+  python3 -m interface [--port N] [--sans-navigateur | --lanceur]   (lancé par bin/interface)
 
 Sert la page de interface/ et une API JSON : lancer un audit (bin/tout), suivre son journal en
 direct (Server-Sent Events), parcourir les audits passés, regénérer une synthèse (bin/synthese),
@@ -56,6 +56,11 @@ RESULTATS = Path(os.environ.get("KIT_AUDIT_RESULTATS") or RACINE / "resultats").
 SECRETS = Path(os.environ.get("KIT_AUDIT_SECRETS") or Path.home() / ".config/audit-kit/secrets.env")
 CHROME = os.environ.get("CHROME_PATH") or navigateur()  # lib/commun.sh l'a déjà détecté ; repli si lancé seul
 PROFIL = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "kit-audit-web/interface"
+# Une seule interface par compte (voir prendre_verrou) ; dossier propre au compte (0700)
+VERROU_INTERFACE = Path(os.environ.get("XDG_RUNTIME_DIR") or PROFIL.parent) / "kit-audit-web-interface.verrou"
+CLASSE_FENETRE = "KitAuditWeb"   # WM_CLASS des fenêtres, = StartupWMClass de outils/lanceur.sh
+DELAI_PREMIERE_FENETRE = 60      # mode lanceur : secondes laissées au navigateur pour ouvrir sa fenêtre
+DELAI_FERMETURE = 3              # mode lanceur : secondes sans fenêtre avant l'arrêt
 PORTS_ESSAYES = 20
 CONNEXIONS_MAX = 64         # connexions traitées en même temps ; au-delà, fermées aussitôt
 DELAI_SOCKET = 30           # secondes sans échange avant fermeture (le flux SSE écrit toutes les 15 s)
@@ -552,6 +557,12 @@ class Serveur(ThreadingHTTPServer):
         if not isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError, TimeoutError)):
             super().handle_error(request, client_address)
 
+    def nouvelle_fenetre(self):
+        """Fenêtre demandée par un autre lancement (SIGUSR1). Si un navigateur tient déjà le profil, le
+        processus lancé lui passe le relais : la fenêtre s'ouvre dans ce navigateur."""
+        print("Nouvelle fenêtre demandée par un autre lancement.", flush=True)
+        ouvrir_navigateur(self.adresse_ouverture(unique=True))
+
     def adresse_ouverture(self, unique=False):
         """Adresse à jeton. unique=True : jeton à usage unique, pour la fenêtre du navigateur, dont la
         ligne de commande est lisible par tous les comptes (ps) ; il ne sert plus une fois la session
@@ -856,7 +867,8 @@ def ouvrir_navigateur(url):
     """Fenêtre d'application du navigateur du kit (profil dédié), sinon navigateur par défaut."""
     if os.access(CHROME, os.X_OK):
         PROFIL.mkdir(parents=True, exist_ok=True)
-        commande = [CHROME, f"--app={url}", f"--user-data-dir={PROFIL}", "--no-first-run", "--no-default-browser-check"]
+        commande = [CHROME, f"--app={url}", f"--user-data-dir={PROFIL}", f"--class={CLASSE_FENETRE}",
+                    "--no-first-run", "--no-default-browser-check"]
     elif shutil.which("xdg-open"):
         commande = ["xdg-open", url]
     else:
@@ -866,16 +878,128 @@ def ouvrir_navigateur(url):
                             start_new_session=True)
 
 
+# --- Instance unique et fenêtre suivie (lanceur du menu) ----------------------------------------
+def prendre_verrou():
+    """Une seule interface par compte : verrou flock, relâché par le système à l'arrêt du processus.
+    Renvoie (descripteur à garder ouvert, None) si on l'obtient, sinon (None, PID de l'interface qui le
+    tient, ou None s'il reste illisible)."""
+    VERROU_INTERFACE.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd = os.open(VERROU_INTERFACE, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        try:
+            for _ in range(20):            # le PID est écrit juste après la prise du verrou
+                pid = os.pread(fd, 16, 0).decode("ascii", "replace").strip()
+                if pid.isdigit():
+                    return None, int(pid)
+                time.sleep(0.1)
+            return None, None
+        finally:
+            os.close(fd)
+    os.ftruncate(fd, 0)
+    os.pwrite(fd, f"{os.getpid()}\n".encode(), 0)
+    return fd, None
+
+
+def pid_fenetre():
+    """PID du navigateur qui tient le profil de l'interface, donc ses fenêtres : Chrome y pose le lien
+    SingletonLock (« hôte-PID ») et le retire en quittant. None si aucun navigateur vivant ne le tient."""
+    try:
+        pid = os.readlink(PROFIL / "SingletonLock").rpartition("-")[2]
+    except OSError:
+        return None
+    if not pid.isdigit():
+        return None
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return None                        # lien laissé par un navigateur tué net
+    except PermissionError:
+        pass
+    return int(pid)
+
+
+def notifier(titre, texte):
+    """Notification du bureau, si notify-send est là (mode lanceur : pas de terminal)."""
+    if shutil.which("notify-send"):
+        try:
+            subprocess.run(["notify-send", "-a", "Kit d'audit web", "-i", str(PAGES / "icone.svg"), titre, texte],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
+def surveiller_fenetre(serveur):
+    """Mode lanceur : l'interface s'arrête quand sa dernière fenêtre est fermée (plus aucun navigateur
+    ne tient le profil). Un audit en cours la garde ouverte jusqu'à sa fin, signalée par une notification.
+    Le profil, plutôt que le processus lancé, est suivi : un navigateur qui tient déjà le profil reçoit
+    la fenêtre et le processus lancé s'arrête aussitôt, sans qu'aucune fenêtre ne soit fermée."""
+    debut, vue, absente, audit = time.monotonic(), False, None, None
+    while True:
+        time.sleep(1)
+        pid = pid_fenetre()
+        if pid:
+            if not vue:
+                print(f"Fenêtre ouverte (navigateur : PID {pid}).", flush=True)
+            vue, absente, audit = True, None, None
+            continue
+        if not vue and time.monotonic() - debut < DELAI_PREMIERE_FENETRE:
+            continue                       # navigateur encore en train de démarrer
+        travail = serveur.travail
+        if travail and travail.en_cours():
+            if not audit:
+                print("Fenêtre fermée pendant un audit : arrêt de l'interface à sa fin.", flush=True)
+            audit, absente = travail, None
+            continue
+        absente = absente or time.monotonic()
+        if time.monotonic() - absente >= DELAI_FERMETURE:
+            break
+    print("Fenêtre fermée : arrêt de l'interface." if vue else "Aucune fenêtre ouverte : arrêt de l'interface.", flush=True)
+    if audit:
+        etat = {"termine": "terminé", "termine_echecs": "terminé avec des échecs", "arrete": "arrêté"}.get(audit.statut, "en échec")
+        notifier(f"{'Synthèse' if audit.genre == 'pdf' else 'Audit'} de {audit.site} : {etat}",
+                 "Le kit d'audit web, rouvert depuis le menu, en affiche le détail.")
+    serveur.shutdown()
+
+
 def principal(argv):
     p = argparse.ArgumentParser(prog="bin/interface", description="Interface graphique du kit d'audit web.")
     p.add_argument("--port", type=int, default=8710)
     p.add_argument("--sans-navigateur", action="store_true")
+    p.add_argument("--lanceur", action="store_true")
     args = p.parse_args(argv)
+    if args.lanceur and args.sans_navigateur:
+        p.error("--lanceur et --sans-navigateur s'excluent")
+    try:
+        verrou, autre = prendre_verrou()
+    except OSError as e:
+        verrou, autre = None, None
+        print(f"Verrou d'instance unique indisponible ({e}).", file=sys.stderr, flush=True)
+    if verrou is not None:
+        signal.signal(signal.SIGUSR1, lambda *_: None)   # pas d'arrêt si un lancement arrive pendant le démarrage
+    elif autre and not args.sans_navigateur:
+        try:
+            os.kill(autre, signal.SIGUSR1)
+            print(f"L'interface tourne déjà (PID {autre}) : elle ouvre une nouvelle fenêtre.", flush=True)
+            return 0
+        except OSError as e:
+            print(f"Interface en cours (PID {autre}) injoignable ({e}) : démarrage d'une autre.", file=sys.stderr, flush=True)
     serveur = ouvrir_serveur(args.port)
-    print(f"Interface du kit d'audit web : {serveur.adresse_ouverture()}\nRésultats : {RESULTATS}\nCtrl+C pour arrêter.", flush=True)
+    # Mode lanceur : la sortie va dans un journal, l'adresse y figure donc sans son jeton
+    adresse = f"http://{serveur.adresse}:{serveur.port}/" if args.lanceur else serveur.adresse_ouverture()
+    fin = "Arrêt à la fermeture de la fenêtre." if args.lanceur else "Ctrl+C pour arrêter."
+    print(f"Interface du kit d'audit web : {adresse}\nRésultats : {RESULTATS}\n{fin}", flush=True)
     navigateur = None if args.sans_navigateur else ouvrir_navigateur(serveur.adresse_ouverture(unique=True))
     for sig in (signal.SIGTERM, signal.SIGHUP):   # kill PID, terminal fermé : même arrêt propre que Ctrl+C
         signal.signal(sig, lambda *_: sys.exit(0))
+    if verrou is not None:
+        signal.signal(signal.SIGUSR1, lambda *_: threading.Thread(target=serveur.nouvelle_fenetre, daemon=True).start())
+    if args.lanceur:
+        if navigateur and navigateur.args[0] == CHROME:
+            threading.Thread(target=surveiller_fenetre, args=(serveur,), daemon=True).start()
+        else:
+            print("Fenêtre non suivie (navigateur du kit introuvable) : arrêter l'interface avec kill.", flush=True)
     try:
         serveur.serve_forever()
     except KeyboardInterrupt:
@@ -888,8 +1012,17 @@ def principal(argv):
             print("\nArrêt de l'interface." + ("\nAudit en cours arrêté." if arrete else ""), flush=True)
         except OSError:
             pass
-        if navigateur and navigateur.args[0] == CHROME and navigateur.poll() is None:
-            navigateur.terminate()
+        if navigateur and navigateur.args[0] == CHROME:
+            # interface unique : les fenêtres du profil sont les siennes, y compris celles ouvertes à la
+            # demande d'autres lancements, qu'a reçues le navigateur lancé ici ou un suivant
+            pid = pid_fenetre() if verrou is not None else None
+            if pid:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except OSError:
+                    pass
+            elif navigateur.poll() is None:
+                navigateur.terminate()
     return 0
 
 

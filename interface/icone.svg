@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<!-- SPDX-FileCopyrightText: 2026 SIM32 (EURL SERVICES INFORMATIQUES MIELAN 32) <https://sim32.fr>
+     Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
+     SPDX-License-Identifier: EUPL-1.2 -->
+<!-- Icône de l'entrée du menu (outils/lanceur.sh) et des notifications : celle de la page (index.html) -->
+<rect width="32" height="32" rx="8" fill="#1d5c8c"/>
+<path d="M9 17l5 5 9-11" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

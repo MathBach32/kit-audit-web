@@ -14,6 +14,10 @@ Origine : scripts écrits pour un audit réel de site (octobre 2026), puis gén�
 ./installer.sh --verifier   # contrôle seulement
 ```
 
+Dans une session graphique, l'installation ajoute aussi l'entrée **« Kit d'audit web »** au menu
+des applications (catégorie Programmation sous Linux Mint) : c'est le point de départ d'un audit,
+voir [Interface graphique](#interface-graphique).
+
 Prérequis du système : Google Chrome ou Chromium (voir [Navigateur](#navigateur)), Node ≥ 22.19,
 Python 3 avec `venv`, `curl`, `dig`, `openssl`. Facultatif : `docker buildx` (pour construire
 l'image SEOnaut).
@@ -49,10 +53,24 @@ diriger `KIT_AUDIT_RESULTATS` ni `--dossier` vers `/tmp`.
 
 ## Interface graphique
 
+Depuis le menu des applications : entrée **« Kit d'audit web »**. Sinon, en ligne de commande :
+
 ```bash
 bin/interface                     # ouvre l'interface dans une fenêtre du navigateur du kit
 bin/interface --sans-navigateur   # affiche seulement l'adresse, à ouvrir soi-même
+outils/lanceur.sh                 # ajoute (ou remet à jour) l'entrée du menu ; --retirer pour l'enlever
 ```
+
+L'entrée du menu (`~/.local/share/applications/kit-audit-web.desktop`, norme freedesktop, donc aussi
+GNOME, KDE…) lance `bin/interface --lanceur`. L'interface s'arrête alors quand on ferme sa dernière
+fenêtre ; si un audit tourne, elle attend sa fin et la signale par une notification. Ses messages
+vont dans `~/.cache/kit-audit-web/interface.log`, et une notification avertit si elle s'arrête sur une
+erreur. L'entrée contient le chemin du kit : après un déplacement du kit, relancer
+`outils/lanceur.sh` (ou `./installer.sh`).
+
+Une seule interface tourne par compte : lancée de nouveau, depuis le menu ou un terminal, elle ouvre
+une fenêtre de plus dans celle qui tourne déjà (`--sans-navigateur` démarre au contraire une
+interface indépendante).
 
 Une page locale pour lancer un audit (adresse, outils à cocher, nombre maximal de pages, domaines
 voisins), suivre son avancement en direct (état et durée de chaque outil, journal), l'arrêter,
@@ -65,8 +83,8 @@ Le serveur (`lib/interface.py`, Python sans dépendance) écoute sur une adresse
 hasard à chaque lancement (`127.x.y.z`, repli sur `127.0.0.1` si le système ne la permet pas),
 port 8710 ou le suivant libre (`--port N` pour en choisir un autre). La fenêtre s'ouvre avec
 `$CHROME_PATH --app` dans un profil dédié (`~/.cache/kit-audit-web/interface`), sinon avec
-`xdg-open`. `Ctrl+C`, `kill` ou la fermeture du terminal arrêtent l'interface, et l'audit en cours
-s'il y en a un. La liste des outils vient de `bin/tout --liste-outils` ; les voyants, de
+`xdg-open`. Lancée d'un terminal, `Ctrl+C`, `kill` ou la fermeture du terminal arrêtent l'interface,
+et l'audit en cours s'il y en a un. La liste des outils vient de `bin/tout --liste-outils` ; les voyants, de
 `synthese/voyants.json`, écrit par la synthèse.
 
 Un seul audit à la fois par dossier d'audit, qu'il soit lancé depuis l'interface ou en ligne de
@@ -135,7 +153,9 @@ chaque page et la lisibilité des adresses.
 Le dossier `tests/site-temoin` contient un petit site dont les défauts sont connus : il déclenche
 chacun des contrôles du catalogue. `tests/verifier.sh` le sert sur un port libre, lance un audit
 complet (sans PageSpeed Insights) et compare les résultats aux défauts attendus
-(`tests/attendus.py`) ; à lancer après chaque mise à jour du kit ou de ses dépendances.
+(`tests/attendus.py`). Il vérifie aussi, sans écran ni vrai navigateur, l'entrée du menu et le mode
+lanceur de l'interface (`tests/lanceur.sh`). À lancer après chaque mise à jour du kit ou de ses
+dépendances.
 
 ## Résultats
 
