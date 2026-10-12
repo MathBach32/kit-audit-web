@@ -79,7 +79,7 @@ for cmd in "${ORDRE[@]}"; do
 done
 
 # Manifeste : outils lancés, codes de retour, durées et versions
-"$PYTHON" - "$DOSSIER_AUDIT" "$SITE_URL" 9>&- <<'PY'
+ORDRE_OUTILS="${ORDRE[*]}" "$PYTHON" - "$DOSSIER_AUDIT" "$SITE_URL" 9>&- <<'PY'
 import json, os, subprocess, sys
 from pathlib import Path
 from kit import version_navigateur
@@ -107,6 +107,17 @@ versions = {
 lances = {o["outil"] for o in outils}
 outil_de = {"Lighthouse": "lighthouse", "Unlighthouse": "unlighthouse", "pa11y-ci": "accessibilite", "lychee": "liens", "advertools": "seo"}
 versions = {k: v for k, v in versions.items() if v and outil_de.get(k, "") in lances | {""}}   # outils réellement lancés
+# Relance partielle (--seulement, --sans) : les outils non relancés gardent leur état et leur version
+try:
+    ancien = json.loads((d / "manifeste.json").read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    ancien = {}
+gardes = [o for o in ancien.get("outils", []) if o.get("outil") not in lances and (d / o.get("outil", "")).is_dir()]
+ordre = os.environ.get("ORDRE_OUTILS", "").split()
+outils = sorted(gardes + outils, key=lambda o: ordre.index(o["outil"]) if o["outil"] in ordre else len(ordre))
+for k, v in ancien.get("versions", {}).items():
+    if k not in versions and outil_de.get(k) in {o["outil"] for o in gardes}:
+        versions[k] = v
 manifeste = {"site": sys.argv[2], "dossier": str(d), "outils": outils, "versions": versions}
 (d / "manifeste.json").write_text(json.dumps(manifeste, ensure_ascii=False, indent=1), encoding="utf-8")
 PY
