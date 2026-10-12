@@ -3,7 +3,8 @@
 # Sous licence EUPL v. 1.2 — dépôt d'origine : https://github.com/MathBach32/kit-audit-web
 # SPDX-License-Identifier: EUPL-1.2
 #
-# Captures d'écran des pages types, en ordinateur (1366 px) et en mobile (390 px), via Chrome headless.
+# Captures d'écran des pages types, en ordinateur (1366 px) et en mobile (390 px), via le navigateur
+# sans interface (Google Chrome ou Chromium, voir lib/commun.sh).
 #
 # Usage : bin/captures URL [--pages FICHIER] [--dossier DOSSIER]
 #   --pages  liste d'URL à capturer (défaut : accueil + 5 pages tirées du sitemap)
@@ -12,7 +13,7 @@
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 OPTIONS="--pages"
 lire_arguments "$@"
-exiger "$CHROME_PATH"
+exiger_navigateur
 preparer_sortie captures
 MOBILE_UA="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 while read -r url; do
@@ -21,5 +22,9 @@ while read -r url; do
     --window-size=1366,900 --screenshot="$SORTIE/${nom}_ordinateur.png" "$url" < /dev/null 2>/dev/null
   "$CHROME_PATH" --headless=new --no-sandbox --hide-scrollbars --virtual-time-budget=8000 \
     --window-size=390,844 --user-agent="$MOBILE_UA" --screenshot="$SORTIE/${nom}_mobile.png" "$url" < /dev/null 2>/dev/null
-  journal "$nom"
+  for format in ordinateur mobile; do
+    [ -s "$SORTIE/${nom}_$format.png" ] && journal "OK  $nom $format" || journal "ERR $nom $format : aucune capture"
+  done
 done < "$(pages_types 6)"
+# Un navigateur qui ne produit rien (CHROME_PATH accepté avec KIT_NAVIGATEUR_LIBRE=1, par exemple) est une panne
+compgen -G "$SORTIE/*.png" > /dev/null || echec "aucune capture produite par $CHROME_PATH"

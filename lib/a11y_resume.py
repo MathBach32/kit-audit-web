@@ -10,12 +10,11 @@
 """
 import csv
 import json
-import os
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-from kit import lire_liste
+from kit import lire_liste, navigateur
 
 RACINE = Path(__file__).resolve().parents[1]
 IMPACTS = ["critical", "serious", "moderate", "minor", "", "info"]
@@ -28,7 +27,9 @@ REGLES_INFORMATIVES = {"frame-tested"}
 
 def configuration(pages, sortie):
     conf = json.loads((RACINE / "config/pa11y.json").read_text(encoding="utf-8"))
-    conf["defaults"]["chromeLaunchConfig"]["executablePath"] = os.environ.get("CHROME_PATH", "/usr/bin/google-chrome")
+    chrome = navigateur()  # sinon Puppeteer lit PUPPETEER_EXECUTABLE_PATH
+    if chrome:
+        conf["defaults"]["chromeLaunchConfig"]["executablePath"] = chrome
     conf["urls"] = lire_liste(pages)
     Path(sortie).write_text(json.dumps(conf, ensure_ascii=False, indent=1), encoding="utf-8")
 
