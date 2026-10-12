@@ -154,7 +154,11 @@ class Verification:
 
     def accessibilite(self):
         r = self.lire_json("accessibilite/resume.json")
-        regles = {l["regle"]: int(l["pages"]) for l in self.lire_csv("accessibilite/regles.csv")}
+        lignes = self.lire_csv("accessibilite/regles.csv")
+        regles = {l["regle"]: int(l["pages"]) for l in lignes if l["impact"] != "à vérifier"}
+        # texte sur une image : axe ne peut pas trancher, le kit le range « à vérifier » et non en défaut
+        self.exiger(any(l["regle"] == "color-contrast" and l["impact"] == "à vérifier" for l in lignes),
+                    "accessibilité : le texte sur une image devrait être un contraste « à vérifier »")
         for regle, pages in AXE.items():
             self.exiger(regles.get(regle) == pages, f"accessibilité : {regle} sur {regles.get(regle, 0)} page(s) au lieu de {pages}")
         nouvelles = set(regles) - set(AXE)

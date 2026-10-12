@@ -325,7 +325,8 @@ class Synthese:
                                l["pages"], l["occurrences"], l["description"]] for l in regles]))
         if r["par_impact"].get("à vérifier"):
             contenu += ('<p class="petit">« À vérifier » : contenus intégrés (vidéos, publicités, formulaires externes) '
-                        "que le test n'a pas pu analyser ; ce n'est pas un défaut en soi.</p>")
+                        "que le test n'a pas pu analyser, ou cas qu'axe n'a pas pu trancher (texte sur une image, éléments "
+                        "superposés) ; ce n'est pas un défaut en soi, mais un point à regarder.</p>")
         graves =r["par_impact"].get("critique", 0) + r["par_impact"].get("grave", 0)
         couleur = "vert" if graves == 0 else "rouge" if r["par_impact"].get("critique", 0) else "orange"
         self.voyant("Accessibilité", couleur, f"{graves} problème(s) critique(s) ou grave(s) selon axe, sur {r['pages_testees']} pages.")
