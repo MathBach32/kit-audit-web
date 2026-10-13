@@ -27,7 +27,7 @@ trap 'kill "$SERVEUR" 2> /dev/null' EXIT
 for _ in $(seq 50); do curl -sf -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 0.2; done
 echo "site témoin : http://127.0.0.1:$PORT/ ; audit dans $TRAVAIL/audit"
 # Lancement comme depuis le menu : node hors service en tête du PATH, vrai Node dans un nvm factice
-NODE_REEL="$(PYTHONPATH="$RACINE/lib" "$PYTHON" -m kit node)" || exit 1
+NODE_REEL="$(PYTHONPATH="$RACINE/lib" "$PYTHON" -m kit node)" || { echo "audit non lancé (dossier : $TRAVAIL)"; exit 1; }
 NODE_REEL="$(readlink -f "$NODE_REEL")"
 NVM_FACTICE="$TRAVAIL/nvm/versions/node/$("$NODE_REEL" --version)/bin"
 mkdir -p "$TRAVAIL/sans-node" "$NVM_FACTICE" && ln -s "$NODE_REEL" "$NVM_FACTICE/node"
