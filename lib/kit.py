@@ -10,8 +10,10 @@ Utilisable aussi en ligne de commande depuis les scripts shell :
   python3 -m kit navigateur        → chemin du navigateur (CHROME_PATH, sinon Google Chrome ou Chromium détecté)
                                      KIT_NAVIGATEUR_LIBRE=1 : CHROME_PATH accepté sans contrôle de version
   python3 -m kit version-navigateur CHEMIN → « Google Chrome 155.0… », « Chromium 157.0… » (« … snap » pour le snap)
+  python3 -m kit node              → chemin de Node (celui du PATH s'il est assez récent, sinon une version de nvm)
 """
 import csv
+import glob
 import json
 import os
 import re
@@ -34,7 +36,8 @@ EXTENSIONS_RESSOURCES = re.compile(
 NAVIGATEURS = ("google-chrome-stable", "google-chrome", "chromium", "/snap/bin/chromium", "chromium-browser",
                "/usr/lib/chromium/chromium", "/opt/google/chrome/chrome")
 VERSION_NAVIGATEUR = re.compile(r"^(Google Chrome|Chromium)\b.*?\d+(\.\d+)+( snap)?", re.M)
-DELAI_VERSION = 5  # secondes accordées à « navigateur --version »
+DELAI_VERSION = 5  # secondes accordées à « navigateur --version » et à « node --version »
+NODE_MIN = (22, 19)  # version minimale de Node pour les outils de package.json ; .nvmrc donne celle de la CI
 
 
 def normaliser_url(adresse):
@@ -192,10 +195,77 @@ def sans_navigateur():
             "(paquet de la distribution ou snap), ou indiquer le chemin du navigateur dans CHROME_PATH")
 
 
+def version_node(chemin):
+    """(24, 19, 0)… selon « chemin --version » ; None si chemin ne répond pas comme Node."""
+    try:
+        r = subprocess.run([chemin, "--version"], stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                           errors="replace", timeout=DELAI_VERSION)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.match(r"v(\d+)\.(\d+)\.(\d+)", r.stdout)
+    return tuple(map(int, m.groups())) if m and r.returncode == 0 else None
+
+
+def _majeure_nvmrc():
+    """Version majeure de Node indiquée par .nvmrc ; None si illisible."""
+    try:
+        with open(os.path.join(RACINE, ".nvmrc"), encoding="utf-8") as f:
+            m = re.match(r"\s*v?(\d+)", f.read())
+    except OSError:
+        return None
+    return int(m.group(1)) if m else None
+
+
+def versions_nvm():
+    """Node installés par nvm : [((24, 19, 0), chemin)], d'après les noms des dossiers. Dossiers de nvm :
+    NVM_DIR, ~/.nvm et $XDG_CONFIG_HOME/nvm (défaut de nvm quand XDG_CONFIG_HOME est défini)."""
+    maison = os.path.expanduser("~")
+    dossiers = (os.environ.get("NVM_DIR"), os.path.join(maison, ".nvm"),
+                os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(maison, ".config"), "nvm"))
+    trouves = []
+    for dossier in dict.fromkeys(os.path.realpath(d) for d in dossiers if d):
+        for chemin in glob.glob(os.path.join(glob.escape(dossier), "versions", "node", "v*", "bin", "node")):
+            m = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", chemin.split(os.sep)[-3])
+            if m:
+                trouves.append((tuple(map(int, m.groups())), chemin))
+    return trouves
+
+
+def node():
+    """Chemin absolu de Node en version NODE_MIN ou plus récente ; "" si aucun.
+
+    D'abord celui du PATH ; sinon une version installée par nvm. nvm ne se charge que dans les shells
+    interactifs (~/.bashrc) : le PATH d'une commande lancée depuis le menu des applications (interface
+    du kit), cron ou systemd n'a pas son Node. Parmi les versions de nvm : la plus récente de la version
+    majeure de .nvmrc (celle de la CI), sinon la plus récente ; chacune est essayée (--version) avant
+    d'être retenue."""
+    chemin = shutil.which("node")
+    if chemin and (version_node(chemin) or ()) >= NODE_MIN:
+        return os.path.abspath(chemin)
+    majeure = _majeure_nvmrc()
+    for version, chemin in sorted(versions_nvm(), key=lambda v: (v[0][0] == majeure, v[0]), reverse=True):
+        if version >= NODE_MIN and (version_node(chemin) or ()) >= NODE_MIN:
+            return chemin
+    return ""
+
+
+def sans_node():
+    """Message d'erreur quand node() ne trouve rien."""
+    chemin = shutil.which("node")
+    version = version_node(chemin) if chemin else None
+    dans_path = (f"{chemin} en version {'.'.join(map(str, version))}" if version
+                 else f"{chemin} ne répond pas comme Node" if chemin else "absent")
+    return (f"Node {'.'.join(map(str, NODE_MIN))} ou plus récent introuvable (PATH : {dans_path} ; aucune version "
+            f"convenable installée par nvm) : installer Node, par exemple avec nvm (nvm install "
+            f"{_majeure_nvmrc() or NODE_MIN[0]}), puis lancer ./installer.sh")
+
+
 def _principal(argv):
-    if argv[1:] == ["navigateur"]:
-        chemin = navigateur()
-        print(chemin or sans_navigateur(), file=sys.stdout if chemin else sys.stderr)
+    recherches = {"navigateur": (navigateur, sans_navigateur), "node": (node, sans_node)}
+    if len(argv) == 2 and argv[1] in recherches:
+        trouver, message = recherches[argv[1]]
+        chemin = trouver()
+        print(chemin or message(), file=sys.stdout if chemin else sys.stderr)
         return 0 if chemin else 1
     commandes = {"url": normaliser_url, "domaine": domaine, "slug": slug, "version-navigateur": version_navigateur}
     if len(argv) != 3 or argv[1] not in commandes:

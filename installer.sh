@@ -19,7 +19,6 @@ declare -A LYCHEE_SHA256=(
   [x86_64]=1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
   [aarch64]=91a7bd65685da41b90ccb9bc867a3d649a7818042dae04ff405e55a25bddee4c
 )
-NODE_MIN=22.19
 SECRETS="${KIT_AUDIT_SECRETS:-$HOME/.config/audit-kit/secrets.env}"
 VERIFIER=0; [ "${1:-}" = --verifier ] && VERIFIER=1
 manques=0
@@ -27,7 +26,6 @@ manques=0
 ok() { printf '  \033[32mOK\033[0m      %s\n' "$*"; }
 manque() { printf '  \033[31mMANQUE\033[0m  %s\n' "$*"; manques=$((manques + 1)); }
 info() { printf '  \033[33mINFO\033[0m    %s\n' "$*"; }
-version_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]; }
 
 echo "Prérequis du système"
 for c in curl dig openssl python3 git; do
@@ -47,10 +45,12 @@ if CHROME="$(python3 lib/kit.py navigateur 2> /dev/null)"; then
 else
   manque "navigateur : $(python3 lib/kit.py navigateur 2>&1 > /dev/null)"
 fi
-if command -v node > /dev/null && version_ge "$(node --version | tr -d v)" "$NODE_MIN"; then
-  ok "Node $(node --version)"
+# Node : même recherche que les commandes du kit (lib/kit.py) : celui du PATH, sinon une version de nvm
+if NODE="$(python3 lib/kit.py node 2> /dev/null)"; then
+  ok "Node $("$NODE" --version) ($NODE)"
 else
-  manque "Node ≥ $NODE_MIN (par exemple via nvm : nvm install 24)"
+  NODE=""
+  manque "$(python3 lib/kit.py node 2>&1 > /dev/null)"
 fi
 if docker buildx version > /dev/null 2>&1; then
   ok "docker buildx $(docker buildx version | awk '{print $2}') (image SEOnaut)"
@@ -59,8 +59,10 @@ else
 fi
 
 echo "Dépendances du kit"
-if [ "$VERIFIER" = 0 ] && command -v npm > /dev/null; then
-  PUPPETEER_SKIP_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund > /dev/null && ok "outils Node installés" || manque "npm ci a échoué"
+if [ "$VERIFIER" = 0 ] && [ -n "$NODE" ]; then
+  # npm du Node retenu, placé en tête du PATH pour cette seule commande
+  PATH="${NODE%/*}:$PATH" PUPPETEER_SKIP_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund > /dev/null \
+    && ok "outils Node installés" || manque "npm ci a échoué"
 fi
 for b in lighthouse unlighthouse-ci pa11y-ci; do
   [ -x "node_modules/.bin/$b" ] && ok "$b" || manque "$b (lancer ./installer.sh)"

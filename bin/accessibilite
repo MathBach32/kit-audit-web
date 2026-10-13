@@ -16,6 +16,7 @@
 OPTIONS="--pages --max"
 lire_arguments "$@"
 exiger pa11y-ci
+exiger_node
 exiger_navigateur
 preparer_sortie accessibilite
 pages="$(pages_a_auditer)"

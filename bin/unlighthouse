@@ -16,6 +16,7 @@
 OPTIONS="--pages --max"
 lire_arguments "$@"
 exiger unlighthouse-ci
+exiger_node
 exiger_navigateur
 preparer_sortie unlighthouse
 export UNLIGHTHOUSE_MAX_ROUTES="${OPTS[--max]:-500}"

@@ -15,6 +15,7 @@
 OPTIONS="--pages"
 lire_arguments "$@"
 exiger lighthouse
+exiger_node
 exiger_navigateur
 preparer_sortie lighthouse
 erreurs=0

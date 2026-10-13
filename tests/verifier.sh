@@ -5,8 +5,10 @@
 #
 # Vérification de bout en bout : sert le site témoin (tests/site-temoin) sur un port libre, lance
 # un audit complet sans PageSpeed Insights (qui exige une clé), puis compare les résultats aux
-# défauts attendus (tests/attendus.py). Vérifie aussi l'entrée du menu et le mode lanceur de
-# l'interface (tests/lanceur.sh). À lancer après chaque mise à jour des dépendances ou du kit.
+# défauts attendus (tests/attendus.py). L'audit tourne comme depuis le menu des applications, où nvm
+# n'est pas chargé : un node hors service masque celui du poste, que les commandes doivent retrouver
+# par un nvm factice. Vérifie aussi la recherche de Node (tests/node.sh), l'entrée du menu et le mode
+# lanceur de l'interface (tests/lanceur.sh). À lancer après chaque mise à jour des dépendances ou du kit.
 #
 # Usage : tests/verifier.sh [--garder]
 #   --garder  conserve le dossier d'audit (sinon supprimé si tout est conforme)
@@ -24,13 +26,22 @@ SERVEUR=$!
 trap 'kill "$SERVEUR" 2> /dev/null' EXIT
 for _ in $(seq 50); do curl -sf -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 0.2; done
 echo "site témoin : http://127.0.0.1:$PORT/ ; audit dans $TRAVAIL/audit"
-"$RACINE/bin/tout" "http://127.0.0.1:$PORT/" --sans psi --dossier "$TRAVAIL/audit" > "$TRAVAIL/tout.log" 2>&1
-echo "bin/tout : code $? (journal : $TRAVAIL/tout.log)"
+# Lancement comme depuis le menu : node hors service en tête du PATH, vrai Node dans un nvm factice
+NODE_REEL="$(PYTHONPATH="$RACINE/lib" "$PYTHON" -m kit node)" || { echo "audit non lancé (dossier : $TRAVAIL)"; exit 1; }
+NODE_REEL="$(readlink -f "$NODE_REEL")"
+NVM_FACTICE="$TRAVAIL/nvm/versions/node/$("$NODE_REEL" --version)/bin"
+mkdir -p "$TRAVAIL/sans-node" "$NVM_FACTICE" && ln -s "$NODE_REEL" "$NVM_FACTICE/node"
+printf '#!/bin/sh\necho "node hors service (tests/verifier.sh : lancement comme depuis le menu)" >&2\nexit 127\n' > "$TRAVAIL/sans-node/node"
+chmod +x "$TRAVAIL/sans-node/node"
+PATH="$TRAVAIL/sans-node:$PATH" NVM_DIR="$TRAVAIL/nvm" \
+  "$RACINE/bin/tout" "http://127.0.0.1:$PORT/" --sans psi --dossier "$TRAVAIL/audit" > "$TRAVAIL/tout.log" 2>&1
+echo "bin/tout (comme depuis le menu) : code $? (journal : $TRAVAIL/tout.log)"
 # Relance partielle (comme « relancer un outil » dans l'interface) : le manifeste garde les autres outils
 "$RACINE/bin/tout" "http://127.0.0.1:$PORT/" --seulement liens --dossier "$TRAVAIL/audit" > "$TRAVAIL/relance.log" 2>&1
 echo "bin/tout --seulement liens : code $? (journal : $TRAVAIL/relance.log)"
 PYTHONPATH="$RACINE/lib" "$PYTHON" "$RACINE/tests/attendus.py" "$TRAVAIL/audit"
 code=$?
+"$RACINE/tests/node.sh" || code=1
 "$RACINE/tests/lanceur.sh" || code=1
 if [ "$code" -eq 0 ] && [ "$GARDER" = 0 ]; then rm -rf "$TRAVAIL"; else echo "résultats conservés : $TRAVAIL"; fi
 exit "$code"
