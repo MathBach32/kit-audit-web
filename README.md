@@ -22,6 +22,13 @@ Prérequis du système : Google Chrome ou Chromium (voir [Navigateur](#navigateu
 Python 3 avec `venv`, `curl`, `dig`, `openssl`. Facultatif : `docker buildx` (pour construire
 l'image SEOnaut).
 
+Node est celui du `PATH` s'il est assez récent, sinon une version installée par **nvm** (`NVM_DIR`,
+sinon `~/.nvm`), la plus récente de la version de `.nvmrc` d'abord (`lib/kit.py`). nvm ne se charge
+que dans un terminal : c'est ainsi que le kit lancé depuis le menu des applications, ou par cron,
+trouve son Node. `./installer.sh` affiche le Node retenu. Avec un autre gestionnaire de versions
+(fnm, Volta…), rendre `node` accessible hors d'un terminal, par exemple par le `PATH` de
+`~/.profile`.
+
 La clé PageSpeed Insights se range **hors du dépôt**, dans `~/.config/audit-kit/secrets.env`
 (droits 600) : `PSI_API_KEY=…`. Elle est lue sans exécuter le fichier, et transmise dans un en-tête
 HTTP : elle n'apparaît ni dans les URL, ni dans la liste des processus, ni dans les journaux.
@@ -153,9 +160,10 @@ chaque page et la lisibilité des adresses.
 Le dossier `tests/site-temoin` contient un petit site dont les défauts sont connus : il déclenche
 chacun des contrôles du catalogue. `tests/verifier.sh` le sert sur un port libre, lance un audit
 complet (sans PageSpeed Insights) et compare les résultats aux défauts attendus
-(`tests/attendus.py`). Il vérifie aussi, sans écran ni vrai navigateur, l'entrée du menu et le mode
-lanceur de l'interface (`tests/lanceur.sh`). À lancer après chaque mise à jour du kit ou de ses
-dépendances.
+(`tests/attendus.py`). L'audit tourne comme depuis le menu des applications : le `node` du `PATH`
+est hors service, et les commandes doivent retrouver le vrai par nvm. Il vérifie aussi la recherche
+de Node (`tests/node.sh`) et, sans écran ni vrai navigateur, l'entrée du menu et le mode lanceur de
+l'interface (`tests/lanceur.sh`). À lancer après chaque mise à jour du kit ou de ses dépendances.
 
 ## Résultats
 
