@@ -12,6 +12,7 @@
 #   KIT_AUDIT_SECRETS    fichier des secrets (défaut : ~/.config/audit-kit/secrets.env)
 #   CHROME_PATH          navigateur imposé (défaut : Google Chrome ou Chromium détecté par lib/kit.py)
 #   KIT_NAVIGATEUR_LIBRE 1 : CHROME_PATH accepté sans contrôle de version (Brave, Microsoft Edge…)
+#   NVM_DIR              dossier de nvm où chercher Node s'il manque au PATH (défaut : ~/.nvm)
 
 set -uo pipefail
 
@@ -31,6 +32,13 @@ PYTHON="$KIT_RACINE/.venv/bin/python"
 # d'erreur cite, et exiger_navigateur arrête les commandes qui ont besoin d'un navigateur.
 KIT_NAVIGATEUR="$("$PYTHON" -m kit navigateur 2> /dev/null)"
 if [ -n "$KIT_NAVIGATEUR" ]; then export CHROME_PATH="$KIT_NAVIGATEUR" PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-$KIT_NAVIGATEUR}"; fi
+# Node : celui du PATH s'il est assez récent, sinon une version installée par nvm (lib/kit.py), que le
+# PATH n'a pas hors d'un terminal (menu des applications, cron…). Son dossier passe alors juste après
+# node_modules/.bin, qui garde la priorité sur les outils installés globalement à côté de Node.
+# KIT_NODE vide si aucun : exiger_node arrête les commandes qui en ont besoin.
+KIT_NODE="$("$PYTHON" -m kit node 2> /dev/null)"
+[ -z "$KIT_NODE" ] || [ "$(command -v node)" = "$KIT_NODE" ] \
+  || PATH="$KIT_RACINE/node_modules/.bin:${KIT_NODE%/*}:${PATH#"$KIT_RACINE/node_modules/.bin:"}"
 
 declare -A OPTS=()
 
@@ -156,3 +164,6 @@ charger_cle_psi() {
 exiger() { command -v "$1" > /dev/null || echec "$1 introuvable. ${2:-Lancer ./installer.sh}"; }
 # exiger_navigateur : arrête le script si aucun navigateur (Google Chrome ou Chromium) n'est utilisable.
 exiger_navigateur() { [ -n "$KIT_NAVIGATEUR" ] || echec "$("$PYTHON" -m kit navigateur 2>&1 > /dev/null)"; }
+# exiger_node : arrête le script si Node est introuvable, avec un message qui le dit ; sans lui, chaque
+# outil de package.json échouerait sur « /usr/bin/env: node » (code 127).
+exiger_node() { [ -n "$KIT_NODE" ] || echec "$("$PYTHON" -m kit node 2>&1 > /dev/null)"; }
