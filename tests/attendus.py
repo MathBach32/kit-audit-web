@@ -67,7 +67,20 @@ SEO = {
     "adresse-majuscules": {"/Infos_Pratiques.html"},
     "adresse-parametres": {"/actualites.html?page=2"},
     "adresse-longue": {LONGUE},
+    "lang-absent": {"/actualites.html", "/actualites.html?page=2"},
+    "viewport-absent": {"/lente.html"},
+    "donnees-structurees-invalides": {"/lente.html"},
+    "reperes-absents": {"/lente.html"},
 }
+# Pages indexables : seules à être contrôlées pour l'Open Graph et les données structurées. L'accueil a
+# un balisage complet (JSON-LD en @graph), /profond/2.html des microdonnées.
+INDEXABLES = {"/", "/404-deguisee.html", "/Infos_Pratiques.html", "/actualites.html", "/cgu.html", "/confidentialite.html",
+              "/contact.html", "/lente.html", "/presque.html", "/rafraichie.html", LONGUE, "/orpheline.html", "/orpheline2.html",
+              *(f"/profond/{n}.html" for n in range(1, 5))}
+SEO["opengraph-incomplet"] = INDEXABLES - {"/"}
+SEO["donnees-structurees-absentes"] = INDEXABLES - {"/", "/profond/2.html"}
+SEMANTIQUE = {"/": ("Organization, WebSite", ""), "/profond/2.html": ("WebPage (microdonnées)", "og:title, og:description, og:image"),
+              "/lente.html": ("", "viewport, og:title, og:description, og:image, données structurées, header, nav, footer")}
 PAGES_200 = 23      # pages HTML en 200, reprises par les autres outils
 SEO_RESUME = {"pages_html": 26, "pages_sitemap_seules": 3, "redirections": 3, "orphelines": 2, "profondeur_max": 4}
 EXCLUES = ("replytocom", "/feed/", "wp-login")   # config/exclusions_pages.txt : jamais explorées ni auditées
@@ -132,6 +145,15 @@ class Verification:
         # pages indexables au texte presque identique (/a-propos/, canonisée vers l'accueil, est exclue)
         self.exiger({"/profond/1.html", "/profond/3.html", "/orpheline2.html"} <= trouves.get("contenu-proche", set()),
                     f"seo : rubrique profonde attendue parmi les contenus presque identiques ({sorted(trouves.get('contenu-proche', set()))})")
+        # balisage page par page : une ligne par page en 200 contrôlée (toutes, sauf la page meta refresh)
+        chemin = lambda u: (lambda p: p.path + ("?" + p.query if p.query else ""))(urllib.parse.urlsplit(u))
+        sem = {chemin(l["url"]): l for l in self.lire_csv("seo/semantique.csv")}
+        self.exiger(len(sem) == PAGES_200 - 1, f"seo : semantique.csv a {len(sem)} pages au lieu de {PAGES_200 - 1}")
+        for chemin, (types, manquants) in SEMANTIQUE.items():
+            l = sem.get(chemin, {})
+            self.exiger((l.get("donnees_structurees", ""), l.get("manquants", "")) == (types, manquants),
+                        f"seo : balisage de {chemin} : {l.get('donnees_structurees')!r}, manquants {l.get('manquants')!r} "
+                        f"au lieu de {types!r}, {manquants!r}")
         liste = (self.d / "urls_html.txt").read_text(encoding="utf-8").split() if (self.d / "urls_html.txt").exists() else []
         accueil = (self.d / "site.txt").read_text(encoding="utf-8").strip() if (self.d / "site.txt").exists() else ""
         self.exiger(len(liste) == PAGES_200 and liste[:1] == [accueil],
