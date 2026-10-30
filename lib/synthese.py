@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.parse
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -34,7 +35,43 @@ OUTILS = {  # sous-dossier → libellé
 
 
 DOMAINES = {"performance": "Vitesse", "referencement": "Référencement", "liens": "Liens",  # étape → voyant
-            "accessibilite": "Accessibilité", "securite": "Sécurité et domaine"}
+            "accessibilite": "Accessibilité", "securite": "Sécurité et domaine",
+            "semantique": "Balisage sémantique", "ergonomie": "Ergonomie"}
+# Champs du balisage sémantique (seo/semantique.csv, colonne « manquants ») → rôle, en clair
+CHAMPS = {
+    "title": "titre de l'onglet et des résultats de recherche",
+    "meta description": "texte affiché sous le titre dans les résultats de recherche",
+    "H1": "titre principal de la page",
+    "lang": "langue du contenu (lecteurs d'écran, moteurs)",
+    "viewport": "affichage adapté au téléphone",
+    "canonique": "adresse de référence de la page",
+    "og:title": "titre de l'aperçu lors d'un partage",
+    "og:description": "texte de l'aperçu lors d'un partage",
+    "og:image": "image de l'aperçu lors d'un partage",
+    "données structurées": "description du contenu pour les moteurs (schema.org)",
+    "header": "repère : en-tête du site",
+    "nav": "repère : menu de navigation",
+    "main": "repère : contenu principal",
+    "footer": "repère : pied de page",
+}
+# Critères d'ergonomie tirés des mesures Lighthouse sur téléphone des pages types : audit → libellé ;
+# conforme si le score vaut 1 (ou, pour les mesures chiffrées, sous le seuil)
+ERGONOMIE = [
+    ("meta-viewport", "Affichage adapté au téléphone, zoom permis", None),
+    ("target-size", "Zones à toucher assez grandes et espacées", None),
+    ("color-contrast", "Texte assez contrasté pour être lu", None),
+    ("link-in-text-block", "Liens repérables dans le texte", None),
+    ("link-name", "Liens à l'intitulé compréhensible", None),
+    ("button-name", "Boutons à l'intitulé compréhensible", None),
+    ("label", "Champs de formulaire étiquetés", None),
+    ("paste-preventing-inputs", "Copier-coller permis dans les champs", None),
+    ("heading-order", "Titres hiérarchisés dans l'ordre", None),
+    ("image-aspect-ratio", "Images affichées sans déformation", None),
+    ("image-size-responsive", "Images assez nettes pour l'écran", None),
+    ("errors-in-console", "Aucune erreur signalée par le navigateur (script, fichier introuvable)", None),
+    ("cumulative-layout-shift", "Mise en page stable au chargement (CLS de 0,1 au plus)", 0.1),
+    ("total-blocking-time", "Page réactive pendant le chargement (blocage de 200 ms au plus)", 200),
+]
 
 
 def t(v):
@@ -190,6 +227,9 @@ class Synthese:
                            + tableau(["Page", "#Perf.", "#LCP", "#CLS", "#TBT"],
                                      [[l["chemin"], pastille(couleur_score(l["perf"]), l["perf"]), f"{virgule(l['lcp_s'])} s",
                                        l["cls"], f"{l['tbt_ms']} ms"] for l in lignes[:10]]))
+            if u.get("non_mesurees"):
+                parties.append(f'<p class="petit">{u["non_mesurees"]} page(s) demandée(s) non mesurée(s) par Unlighthouse '
+                               "(erreur, ou page refusée par le serveur) : liste dans unlighthouse/non_mesurees.txt.</p>")
             if not perf_mobile:
                 perf_mobile, lcp_mobile = [m.get("performance", 0)], [u.get("lcp_moyen_s") or 0]
         for o in ("psi", "lighthouse", "unlighthouse"):
@@ -266,6 +306,77 @@ class Synthese:
         self.section("Référencement naturel", "".join(parties))
         self.chiffres.insert(0, (str(n), "pages HTML trouvées"))
         self.voyant("Référencement", couleur, texte)
+
+    # --- Balisage sémantique ----------------------------------------------------------------------
+    def semantique(self):
+        lignes = lire_csv(self.d / "seo/semantique.csv")
+        r = (lire_json(self.d / "seo/resume.json") or {}).get("semantique")
+        if not lignes or not r:  # pas d'exploration, ou audit produit par une version antérieure du kit
+            return
+        n, manquants = len(lignes), r["manquants"]
+        parties = [f"<p>{n} pages contrôlées (pages en 200) : <strong>{r['completes']} au balisage complet</strong>. "
+                   "L'Open Graph et les données structurées ne sont attendus que sur les pages indexables ; la langue, "
+                   "le viewport et les repères de structure, sur toutes.</p>",
+                   tableau(["Champ", "Rôle", "#Pages sans"],
+                           [[c, role, manquants[c]] for c, role in CHAMPS.items() if manquants.get(c)])]
+        types = r.get("types_donnees_structurees") or {}
+        parties.append("<p>Données structurées trouvées : "
+                       + (t(", ".join(f"{k} ({v} p.)" for k, v in types.items())) if types else "aucune") + ".</p>")
+        incompletes = [l for l in lignes if l["manquants"]]
+        if incompletes:
+            parties.append("<h3>Champs manquants, page par page</h3>" + tableau(
+                ["Page", "Champs manquants"], [[chemin_court(l["url"]), l["manquants"]] for l in incompletes]))
+        parties.append('<p class="petit">Relevé dans le HTML envoyé par le serveur ; détail dans seo/semantique.csv '
+                       "(types de données structurées, carte Twitter, nombre de H1…).</p>")
+        sans_viewport = manquants.get("viewport", 0)
+        couleur = "rouge" if sans_viewport else "vert" if not incompletes else "orange"
+        principaux = ", ".join(f"{c} ({v})" for c, v in list(manquants.items())[:3])
+        self.voyant("Balisage sémantique", couleur, f"{r['completes']} page(s) sur {n} au balisage complet"
+                    + (f" ; champs les plus souvent absents : {principaux}." if principaux else "."))
+        self.chiffre(f"{r['completes']}/{n}", "pages au balisage sémantique complet")
+        self.section("Balisage sémantique", "".join(parties))
+
+    # --- Ergonomie -------------------------------------------------------------------------------
+    def ergonomie(self):
+        mesures = {}
+        for f in sorted((self.d / "lighthouse").glob("*_mobile.json")):
+            r = lire_json(f) or {}
+            if r.get("audits"):
+                mesures[chemin_court(r.get("finalDisplayedUrl") or r.get("requestedUrl") or f.stem)] = r["audits"]
+        if not mesures:
+            self.voyant("Ergonomie", "gris", "Pas de mesure Lighthouse sur téléphone.")
+            return
+        rangees, en_defaut = [], 0
+        for audit, libelle, seuil in ERGONOMIE:
+            ok, ko = [], []
+            for page, audits in mesures.items():
+                a = audits.get(audit) or {}
+                if seuil is not None and a.get("numericValue") is not None:
+                    (ok if a["numericValue"] <= seuil else ko).append(page)
+                elif seuil is None and a.get("score") is not None and a.get("scoreDisplayMode") == "binary":
+                    (ok if a["score"] == 1 else ko).append(page)
+            if not ok and not ko:  # sans objet (aucun formulaire…) ou non mesurable
+                continue
+            en_defaut += bool(ko)
+            rangees.append([libelle, pastille("orange" if ko else "vert", f"{len(ok)}/{len(ok) + len(ko)}"),
+                            ", ".join(ko) if ko else "–"])
+        contacts = Counter(l["cible"].split(":", 1)[0] for l in lire_csv(self.d / "inventaire/liens.csv")
+                           if l["cible"].startswith(("tel:", "mailto:")))
+        if (self.d / "inventaire/liens.csv").exists():
+            rangees.append(["Téléphone et courriel cliquables", pastille("vert" if contacts else "orange",
+                            "oui" if contacts else "non"), f"{contacts['tel']} lien(s) tel:, {contacts['mailto']} lien(s) mailto:"
+                            if contacts else "aucun lien tel: ni mailto: sur les pages analysées"])
+            en_defaut += not contacts
+        contenu = (f"<p>Critères mesurables automatiquement, sur téléphone, pour les {len(mesures)} pages types "
+                   "(colonne « Conformes » : pages conformes sur pages mesurées).</p>"
+                   + tableau(["Critère", "Conformes", "Pages à corriger"], rangees)
+                   + '<p class="petit">Ces contrôles ne remplacent pas un avis d\'ergonomie : clarté de l\'offre, parcours '
+                   "jusqu'au contact ou à l'achat, lisibilité des contenus et confiance s'évaluent en parcourant le site. "
+                   "Captures des pages types dans captures/.</p>")
+        couleur = "vert" if not en_defaut else "orange" if en_defaut <= 3 else "rouge"
+        self.voyant("Ergonomie", couleur, f"{len(rangees) - en_defaut} critère(s) d'ergonomie satisfait(s) sur {len(rangees)}, "
+                                          f"mesurés sur téléphone pour {len(mesures)} pages types.")
+        self.section("Ergonomie sur téléphone", contenu)
 
     # --- Liens -----------------------------------------------------------------------------------
     def liens(self):
@@ -421,6 +532,30 @@ class Synthese:
             self.section("Aperçu", "".join(figures))
 
     # --- Assemblage ------------------------------------------------------------------------------
+    def fiabilite(self):
+        """Avertissements sur la fiabilité des relevés : refus du serveur pendant l'audit (refus.tsv,
+        écrit par attendre_acces de lib/commun.sh), pages non mesurées, captures manquantes."""
+        alertes, refus = [], [l.split("\t") for l in self.lire_texte("refus.tsv").splitlines() if l.count("\t") >= 3]
+        persistants = sorted({o for _, o, _, etat in refus if etat == "persistant"})
+        if persistants:
+            alertes.append(f"le serveur a refusé l'accès pendant l'audit ({refus[-1][2]}), sans lever ce blocage à temps : "
+                           f"les mesures de {', '.join(persistants)} sont faussées ou incomplètes et sont à relancer plus tard")
+        elif refus:
+            alertes.append(f"le serveur a bloqué temporairement le poste d'audit à {len(refus)} reprise(s) ({refus[0][2]}) ; "
+                           "les mesures ont repris une fois le blocage levé")
+        u = lire_json(self.d / "unlighthouse/resume.json") or {}
+        if u.get("non_mesurees"):
+            alertes.append(f"{u['non_mesurees']} page(s) non mesurée(s) par Unlighthouse")
+        if (self.d / "captures").is_dir() and not any((self.d / "captures").glob("*.png")):
+            alertes.append("aucune capture d'écran produite")
+        return alertes
+
+    def lire_texte(self, nom):
+        try:
+            return (self.d / nom).read_text(encoding="utf-8")
+        except OSError:
+            return ""
+
     def annexe(self):
         m = lire_json(self.d / "manifeste.json")
         contenu = ""
@@ -437,7 +572,8 @@ class Synthese:
         self.section("Méthode et outils", contenu)
 
     def html(self):
-        for etape in (self.performance, self.referencement, self.liens, self.accessibilite, self.securite, self.contenus, self.captures):
+        for etape in (self.performance, self.referencement, self.semantique, self.ergonomie, self.liens, self.accessibilite,
+                      self.securite, self.contenus, self.captures):
             try:
                 etape()
             except Exception as e:  # noqa: BLE001 — une donnée inattendue ne doit pas bloquer toute la synthèse
@@ -456,13 +592,16 @@ class Synthese:
         chiffres = "".join(f'<div class="chiffre"><div class="val">{t(v)}</div><div class="lib">{t(l)}</div></div>' for v, l in self.chiffres[:8])
         sections = "".join(f'<section><h2><span class="num">{i}</span>{t(titre)}</h2>{contenu}</section>'
                            for i, (titre, contenu) in enumerate(self.sections, 1))
+        alertes = self.fiabilite()
+        alerte = (f'<div class="encadre alerte"><p><strong>Relevés incomplets :</strong> {t(" ; ".join(alertes))}.</p></div>'
+                  if alertes else "")
         return typographie(f"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><title>Audit {t(domaine)} — {t(date_fr(self.date))}</title>
 <style>{style}</style></head><body>
 <div class="entete"><div class="surtitre">Audit technique du site</div><h1>{t(domaine)}</h1>
 <div class="meta">{t(self.site)} · relevés du {t(date_fr(self.date))}</div></div>
 <div class="encadre"><p>Cette synthèse rassemble les mesures automatiques du kit d'audit. Chaque voyant résume un domaine
-selon des seuils usuels ; le détail et les données brutes suivent.</p></div>
+selon des seuils usuels ; le détail et les données brutes suivent.</p></div>{alerte}
 <div class="voyants">{voyants}</div><div class="chiffres">{chiffres}</div>
 {sections}
 </body></html>""")
@@ -490,13 +629,16 @@ def principal(dossier):
         print(f"ERREUR : PDF impossible : {sans_navigateur()} ; {reste()}.", file=sys.stderr)
         return 1
     try:
-        subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--no-pdf-header-footer", "--allow-file-access-from-files",
-                        f"--print-to-pdf={pdf}", page.as_uri()], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        with tempfile.TemporaryDirectory(prefix="kit-synthese.") as profil:   # profil vierge, propre à la synthèse
+            subprocess.run([CHROME, "--headless=new", "--no-sandbox", f"--user-data-dir={profil}", "--no-first-run",
+                            "--no-pdf-header-footer", "--allow-file-access-from-files", f"--print-to-pdf={pdf}", page.as_uri()],
+                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
         if not pdf.is_file() or not pdf.stat().st_size:
             raise OSError("fichier PDF absent ou vide")
-    except (OSError, subprocess.CalledProcessError) as e:
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         shutil.rmtree(nouvelle, ignore_errors=True)
-        detail = f"code {e.returncode}" if isinstance(e, subprocess.CalledProcessError) else (e.strerror or str(e))
+        detail = (f"code {e.returncode}" if isinstance(e, subprocess.CalledProcessError) else "délai dépassé"
+                  if isinstance(e, subprocess.TimeoutExpired) else (e.strerror or str(e)))
         print(f"ERREUR : PDF non produit par {CHROME} ({detail}) ; {reste()}.", file=sys.stderr)
         return 1
     shutil.rmtree(ancienne, ignore_errors=True)

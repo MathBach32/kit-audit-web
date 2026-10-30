@@ -21,6 +21,7 @@ exiger_navigateur
 preparer_sortie accessibilite
 pages="$(pages_a_auditer)"
 "$PYTHON" -m a11y_resume config "$pages" "$SORTIE/configuration.json"
+attendre_acces
 pa11y-ci --config "$SORTIE/configuration.json" --json < /dev/null > "$SORTIE/pa11y.json" 2> "$SORTIE/journal.txt"
 code=$?
 # pa11y-ci renvoie 2 quand il trouve des problèmes : ce n'est pas une panne
@@ -30,6 +31,7 @@ code=$?
 if [ -s "$SORTIE/pages-relance.txt" ]; then
   journal "seconde tentative pour $(wc -l < "$SORTIE/pages-relance.txt") page(s) non testée(s)"
   "$PYTHON" -m a11y_resume config "$SORTIE/pages-relance.txt" "$SORTIE/configuration-relance.json"
+  attendre_acces
   pa11y-ci --config "$SORTIE/configuration-relance.json" --json < /dev/null > "$SORTIE/pa11y-relance.json" 2>> "$SORTIE/journal.txt"
   [ -s "$SORTIE/pa11y-relance.json" ] && "$PYTHON" -m a11y_resume fusionner "$SORTIE"
 fi

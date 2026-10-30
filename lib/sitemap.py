@@ -94,7 +94,10 @@ def tout(url):
 def pages_types(url, n, pages):
     """L'accueil, les pages les moins profondes, et une page profonde s'il y en a."""
     accueil = normaliser_url(url)
-    autres = [p for p in pages if normaliser_url(p).rstrip("/") != accueil.rstrip("/")]
+    # l'accueil, avec ou sans www, n'est pris qu'une fois ; les doublons de la liste sont écartés
+    est_accueil = lambda u: meme_site(u, accueil) and urllib.parse.urlsplit(normaliser_url(u)).path.strip("/") == "" \
+        and not urllib.parse.urlsplit(u).query
+    autres = list(dict.fromkeys(p for p in pages if not est_accueil(p)))
     profondeur = lambda u: len([s for s in urllib.parse.urlsplit(u).path.split("/") if s])
     triees = sorted(autres, key=lambda u: (profondeur(u), autres.index(u)))
     choix = triees[: max(n - 2, 0)]

@@ -41,6 +41,10 @@ echo "bin/tout (comme depuis le menu) : code $? (journal : $TRAVAIL/tout.log)"
 echo "bin/tout --seulement liens : code $? (journal : $TRAVAIL/relance.log)"
 PYTHONPATH="$RACINE/lib" "$PYTHON" "$RACINE/tests/attendus.py" "$TRAVAIL/audit"
 code=$?
+# Sonde d'accès (attendre_acces, lib/commun.sh) : un 429 est un refus, une page normale ne l'est pas
+refus="$(PYTHONPATH="$RACINE/lib" "$PYTHON" -m kit acces "http://127.0.0.1:$PORT/surcharge.xml")" && code=1
+[ "$refus" = "code 429 : trop de requêtes" ] || { echo "ÉCHEC      sonde d'accès : « $refus » pour un 429"; code=1; }
+PYTHONPATH="$RACINE/lib" "$PYTHON" -m kit acces "http://127.0.0.1:$PORT/" > /dev/null || { echo "ÉCHEC      sonde d'accès : accueil refusé"; code=1; }
 "$RACINE/tests/node.sh" || code=1
 "$RACINE/tests/lanceur.sh" || code=1
 if [ "$code" -eq 0 ] && [ "$GARDER" = 0 ]; then rm -rf "$TRAVAIL"; else echo "résultats conservés : $TRAVAIL"; fi

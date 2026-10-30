@@ -125,7 +125,7 @@ d'audit imposé), et selon les commandes `--pages FICHIER` (liste d'URL) et `--m
 | Commande | Outil | Ce qu'elle produit |
 |---|---|---|
 | `entetes` | curl, openssl, dig, RDAP | en-têtes de sécurité, redirections, certificat, DNS (SPF, DMARC, DNSSEC, CAA), domaine |
-| `seo` | advertools 0.18 | exploration du site (liens, redirections, pages du sitemap qu'aucun lien n'atteint) et une quarantaine de contrôles SEO |
+| `seo` | advertools 0.18 | exploration du site (liens, redirections, pages du sitemap qu'aucun lien n'atteint), une quarantaine de contrôles SEO et le balisage sémantique de chaque page |
 | `inventaire` | Python | contenus (API WordPress si disponible), métadonnées, liens, poids des images, vidéos YouTube |
 | `liens` | lychee 0.24.2 | liens cassés ; les services anti-robots sont listés à part, « à vérifier dans un navigateur » |
 | `accessibilite` | pa11y-ci 5.0.0 + axe | problèmes WCAG 2.1 AA par page et par règle |
@@ -133,7 +133,7 @@ d'audit imposé), et selon les commandes `--pages FICHIER` (liste d'URL) et `--m
 | `psi` | API PageSpeed Insights | mêmes mesures chez Google, plus les données de vrais visiteurs (CrUX) si elles existent |
 | `unlighthouse` | Unlighthouse 0.19.1 | Lighthouse sur toutes les pages, rapport consultable |
 | `captures` | navigateur sans interface | captures ordinateur (1366 px) et mobile (390 px) des pages types |
-| `synthese` | Python + navigateur | `synthese/synthese.html` et `synthese.pdf` |
+| `synthese` | Python + navigateur | `synthese/synthese.html` et `synthese.pdf`, dont le balisage page par page et l'ergonomie sur téléphone |
 
 Les pages types sont l'accueil, les quatre pages les moins profondes du sitemap et une page
 profonde (un article, en général). Les commandes qui parcourent tout le site réutilisent la liste
@@ -157,6 +157,24 @@ identiques ou presque, les images sans `alt`, les liens (sans texte, nofollow, v
 redirections, sans protocole), la profondeur, la lenteur du serveur, les en-têtes de sécurité de
 chaque page et la lisibilité des adresses.
 
+Le **balisage sémantique** de chaque page en 200 est relevé dans `seo/semantique.csv` : title,
+description, H1, langue, viewport, canonique, Open Graph (`og:title`, `og:description`,
+`og:image`), carte Twitter, données structurées (types JSON-LD, y compris en `@graph`, microdonnées,
+RDFa), repères `header`, `nav`, `main` et `footer` (ou leurs rôles ARIA ; un `header` placé dans un
+`article` ou un `main` n'en est pas un), et la liste des champs manquants. L'Open Graph et les données
+structurées ne sont attendus que sur les pages indexables. La synthèse en tire une section
+« Balisage sémantique » avec le tableau des champs manquants page par page.
+
+Deux explorations d'un site inchangé donnent les mêmes fichiers, aux temps de réponse près (et donc
+au constat « réponse lente ») : les pages sont triées par adresse dès leur réunion, et les contenus
+presque identiques sont comparés avec un hachage stable (CRC32), là où `hash()` de Python change à
+chaque processus.
+
+La section **« Ergonomie sur téléphone »** de la synthèse reprend, pour les pages types, les critères
+que Lighthouse mesure sur téléphone (zones à toucher, contraste, liens et boutons nommés, champs
+étiquetés, images, stabilité de la mise en page, réactivité, erreurs signalées par le navigateur) et la présence de
+liens `tel:` et `mailto:`. Elle ne remplace pas un avis d'ergonomie rédigé en parcourant le site.
+
 Le dossier `tests/site-temoin` contient un petit site dont les défauts sont connus : il déclenche
 chacun des contrôles du catalogue. `tests/verifier.sh` le sert sur un port libre, lance un audit
 complet (sans PageSpeed Insights) et compare les résultats aux défauts attendus
@@ -169,7 +187,7 @@ l'interface (`tests/lanceur.sh`). À lancer après chaque mise à jour du kit ou
 
 ```
 resultats/<domaine>/<AAAA-MM-JJ>/
-├── site.txt, urls_sitemap.txt, urls_html.txt, journal.txt, manifeste.json
+├── site.txt, urls_sitemap.txt, urls_html.txt, journal.txt, manifeste.json, refus.tsv (s'il y a lieu)
 ├── entetes/  seo/  inventaire/  liens/  accessibilite/
 ├── lighthouse/  psi/  unlighthouse/  captures/
 └── synthese/synthese.pdf
@@ -194,14 +212,22 @@ sous-dossier.
 
 - Les tests automatiques d'accessibilité ne trouvent qu'une partie des problèmes.
 - Certains hébergeurs protègent leurs sites contre les robots trop rapides : ils répondent alors par
-  des redirections sans fin (307), des 429 ou des 503. `bin/liens` limite donc son débit (deux
+  des redirections sans fin (307), des 429 ou des 503, voire bloquent un temps l'adresse du poste
+  (o2switch « Tiger Protect » : page « HTTP 429 Ralentissez », puis négociation TLS refusée). Avant
+  chaque mesure par le navigateur (accessibilité, Lighthouse, Unlighthouse, captures), le kit vérifie
+  que le site répond normalement, sinon attend 1, 2, 4 puis 8 minutes (`KIT_PAUSES_ACCES`). Les
+  refus sont consignés dans `refus.tsv`, et la synthèse signale en tête les relevés incomplets
+  (blocage persistant, pages qu'Unlighthouse a écartées, listées dans `unlighthouse/non_mesurees.txt`,
+  captures absentes). Les captures et le PDF partent d'un profil de navigateur vierge, jamais de
+  celui de l'utilisateur. `bin/liens` limite donc son débit (deux
   requêtes simultanées et au moins 250 ms d'écart par hôte), garde les cookies de ces protections,
   et classe ces refus « à vérifier » plutôt que « cassés ». S'il est interrompu, il réessaie une
   minute plus tard, plus lentement, puis page par page ; les pages refusées sont listées dans
   `liens/pages_non_verifiees.txt`.
 - `bin/seo` lit le HTML envoyé par le serveur, sans exécuter le JavaScript : un site entièrement
   construit dans le navigateur doit être audité avec les outils fondés sur Chrome (Lighthouse,
-  Unlighthouse, pa11y).
+  Unlighthouse, pa11y). Il en va de même du balisage sémantique : une page qui remplit son titre ou
+  son H1 par JavaScript est relevée telle que le serveur l'envoie.
 - Ne pas créer ni supprimer de réseaux Docker (`docker compose up/down`) pendant un audit :
   le navigateur interrompt alors ses chargements (`ERR_NETWORK_CHANGED`), ce qui fausse Lighthouse,
   Unlighthouse et pa11y.

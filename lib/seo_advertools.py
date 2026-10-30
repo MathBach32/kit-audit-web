@@ -11,9 +11,16 @@ pas suivies en silence : chacune est enregistrée (code, destination), puis sa d
 Chaque constat porte un code du catalogue config/problemes.csv (libellé, catégorie, gravité,
 explication, correction).
 
+Le balisage sémantique de chaque page est relevé dans le HTML envoyé par le serveur : langue,
+viewport, Open Graph, données structurées (JSON-LD, microdonnées, RDFa) et repères de structure
+(en-tête, navigation, contenu principal, pied de page).
+
+Les résultats ne dépendent pas de l'ordre d'arrivée des pages : deux explorations d'un site inchangé
+donnent les mêmes fichiers, aux temps de réponse près (et donc au constat « réponse lente »).
+
 Sorties dans DOSSIER : crawl*.jsonl (une par passe), robots.csv, sitemap.csv, redirections.csv,
-pages.csv (une ligne par page), liens.csv (liens internes), problemes.csv (une ligne par constat),
-resume.json ; et ../urls_html.txt : pages HTML en 200, l'accueil d'abord puis par profondeur,
+pages.csv (une ligne par page), semantique.csv (balisage de chaque page en 200 et champs manquants),
+liens.csv (liens internes), problemes.csv (une ligne par constat), resume.json ; et ../urls_html.txt : pages HTML en 200, l'accueil d'abord puis par profondeur,
 liste réutilisée par les autres commandes du kit.
 """
 import hashlib
@@ -21,6 +28,7 @@ import json
 import re
 import sys
 import urllib.parse
+import zlib
 from collections import Counter, defaultdict, deque
 from itertools import zip_longest
 from pathlib import Path
@@ -62,7 +70,24 @@ XPATH = {
                       "[not(self::link[contains(concat(' ',translate(normalize-space(@rel),'DNSPRFTCO','dnsprftco'),' '),' dns-prefetch ')"
                       " or contains(concat(' ',translate(normalize-space(@rel),'DNSPRFTCO','dnsprftco'),' '),' preconnect ')])])",
     "texte_principal": "normalize-space(string((//main|//article|//*[@role='main'])[1]))",
+    # Balisage sémantique
+    "lang": "normalize-space((/html/@lang|/html/@xml:lang)[1])",
+    "meta_viewport": "count(//meta[translate(@name,'VIEWPORT','viewport')='viewport'][normalize-space(@content)])",
+    **{f"og_{p}": f"count(//meta[@property='og:{p}' or @name='og:{p}'][normalize-space(@content)])"
+       for p in ("title", "description", "image")},
+    "twitter_card": "count(//meta[@name='twitter:card' or @property='twitter:card'][normalize-space(@content)])",
+    "jsonld": "//script[translate(normalize-space(@type),'APLICTONJSD','aplictonjsd')='application/ld+json']/text()",
+    "microdonnees": "//*[@itemtype]/@itemtype|//*[@typeof]/@typeof",   # types des microdonnées et du RDFa
+    # repères : un header ou un footer dans article, aside, main, nav ou section n'en est pas un
+    "repere_entete": "count(//header[not(ancestor::article|ancestor::aside|ancestor::main|ancestor::nav|ancestor::section)]"
+                     "|//*[@role='banner'])",
+    "repere_navigation": "count(//nav|//*[@role='navigation'])",
+    "repere_principal": "count(//main|//*[@role='main'])",
+    "repere_pied": "count(//footer[not(ancestor::article|ancestor::aside|ancestor::main|ancestor::nav|ancestor::section)]"
+                   "|//*[@role='contentinfo'])",
 }
+REPERES = {"repere_entete": "en-tête (header)", "repere_navigation": "navigation (nav)",
+           "repere_principal": "contenu principal (main)", "repere_pied": "pied de page (footer)"}
 
 
 def normaliser(u):
@@ -175,8 +200,34 @@ def sitemap_et_robots(racine, depart, d):
 
 
 def bardeaux(texte):
+    """Groupes de 5 mots, hachés par CRC32 : hash() de Python change à chaque processus."""
     mots = re.findall(r"\w+", texte.lower())
-    return {hash(" ".join(mots[i:i + 5])) & 0x7FFFFFFF for i in range(max(len(mots) - 4, 0))}
+    return {zlib.crc32(" ".join(mots[i:i + 5]).encode()) & 0x7FFFFFFF for i in range(max(len(mots) - 4, 0))}
+
+
+def types_jsonld(valeur):
+    """(types schema.org trouvés, nombre de blocs JSON-LD illisibles). valeur : textes des balises
+    script JSON-LD de la page, joints par SEP."""
+    types, invalides = set(), 0
+
+    def parcourir(x):
+        if isinstance(x, dict):
+            t = x.get("@type")
+            types.update([t] if isinstance(t, str) else [v for v in t if isinstance(v, str)] if isinstance(t, list) else [])
+            for v in x.values():
+                parcourir(v)
+        elif isinstance(x, list):
+            for v in x:
+                parcourir(v)
+
+    for bloc in morceaux(valeur):
+        if not bloc.strip():
+            continue
+        try:
+            parcourir(json.loads(bloc))
+        except ValueError:
+            invalides += 1
+    return sorted(t.rsplit("/", 1)[-1] for t in types), invalides
 
 
 def contenus_proches(textes, seuil=PROCHE):
@@ -293,7 +344,8 @@ def principal(url, dossier, max_pages=2000):
     suivre_redirections("liens")
     passe(urls_sitemap, "crawl_sitemap", "sitemap", False)
     suivre_redirections("sitemap")  # redirections rencontrées dans la passe sitemap
-    df = pd.concat(cadres, ignore_index=True).drop_duplicates("url_n").reset_index(drop=True)
+    # triées par adresse : la suite (constats, ordre de urls_html.txt) ne dépend plus de l'ordre d'arrivée
+    df = pd.concat(cadres, ignore_index=True).drop_duplicates("url_n").sort_values("url_n", kind="stable").reset_index(drop=True)
     resume["plafond_atteint"] = sum(len(c) for c in cadres) >= max_pages or bool(non_explorees)
     if non_explorees.get("sitemap"):
         resume["sitemap_non_explorees"] = non_explorees["sitemap"]
@@ -347,7 +399,7 @@ def principal(url, dossier, max_pages=2000):
                 file.append(c)
 
     entetes = {nom: colonne(html, "resp_headers_" + nom).fillna("").astype(str) for nom in [*SECURITE, "x-robots-tag"]}
-    pages, problemes = [], []
+    pages, problemes, semantique = [], [], []
 
     def ajouter(u, code, detail=""):
         e = catalogue[code]
@@ -464,6 +516,39 @@ def principal(url, dossier, max_pages=2000):
             absents.remove("x-frame-options")
         if absents:
             ajouter(u, "entetes-securite", ", ".join(absents))
+        # Balisage sémantique. Open Graph et données structurées ne servent qu'aux pages indexables
+        # (partage, résultats enrichis) ; langue, viewport et repères valent pour toutes.
+        lang = premier(l.get("lang"))
+        og = {p: nombre(l.get(f"og_{p}")) > 0 for p in ("title", "description", "image")}
+        types, invalides = types_jsonld(l.get("jsonld"))
+        micro = sorted({t.rstrip("/").rsplit("/", 1)[-1] for v in morceaux(l.get("microdonnees")) for t in v.split() if t.strip()})
+        reperes = {cle: nombre(l.get(cle)) > 0 for cle in REPERES}
+        structurees = bool(types or micro)
+        if not lang:
+            ajouter(u, "lang-absent")
+        if not nombre(l.get("meta_viewport")):
+            ajouter(u, "viewport-absent")
+        if invalides:
+            ajouter(u, "donnees-structurees-invalides", f"{invalides} bloc(s) JSON-LD illisible(s)")
+        if indexable and not all(og.values()):
+            ajouter(u, "opengraph-incomplet", ", ".join(f"og:{p}" for p, ok in og.items() if not ok))
+        if indexable and not structurees:
+            ajouter(u, "donnees-structurees-absentes")
+        if not all(reperes.values()):
+            ajouter(u, "reperes-absents", ", ".join(REPERES[c] for c, ok in reperes.items() if not ok))
+        manquants = ([n for n, ok in (("title", titre), ("meta description", desc), ("H1", h1), ("lang", lang),
+                                      ("viewport", nombre(l.get("meta_viewport")))) if not ok]
+                     + (["canonique"] if not canonique and not noindex else [])
+                     + ([f"og:{p}" for p, ok in og.items() if not ok] + ([] if structurees else ["données structurées"])
+                        if indexable else [])
+                     + [REPERES[c].split(" (")[1].rstrip(")") for c, ok in reperes.items() if not ok])
+        semantique.append({"url": u, "_n": un, "indexable": indexable, "title": bool(titre), "meta_description": bool(desc),
+                           "h1": len(h1), "lang": lang, "viewport": bool(nombre(l.get("meta_viewport"))), "canonique": bool(canonique),
+                           **{f"og_{p}": ok for p, ok in og.items()}, "twitter_card": nombre(l.get("twitter_card")) > 0,
+                           "donnees_structurees": ", ".join(types + [f"{t} (microdonnées)" for t in micro]),
+                           "jsonld_illisibles": invalides,
+                           **{c.replace("repere_", ""): ok for c, ok in reperes.items()},
+                           "manquants": ", ".join(manquants)})
         chemin = urllib.parse.unquote(urllib.parse.urlsplit(u).path)
         if "_" in chemin:
             ajouter(u, "adresse-soulignement", chemin)
@@ -521,6 +606,12 @@ def principal(url, dossier, max_pages=2000):
     pages.sort(key=rang)
     pages_df = pd.DataFrame(pages).drop(columns=["_ordre", "_n", "_texte"])
     pages_df.to_csv(d / "pages.csv", index=False)
+    ordre_pages = {p["_n"]: i for i, p in enumerate(pages)}
+    semantique.sort(key=lambda s: ordre_pages[s["_n"]])
+    colonnes_sem = ["url", "indexable", "title", "meta_description", "h1", "lang", "viewport", "canonique", "og_title",
+                    "og_description", "og_image", "twitter_card", "donnees_structurees", "jsonld_illisibles",
+                    "entete", "navigation", "principal", "pied", "manquants"]
+    pd.DataFrame(semantique, columns=colonnes_sem).to_csv(d / "semantique.csv", index=False)
     pd.DataFrame(liens, columns=["source", "cible", "texte", "nofollow"]).to_csv(d / "liens.csv", index=False)
     cols = ["url", "code", "probleme", "detail", "categorie", "gravite"]
     pd.DataFrame(problemes, columns=cols).to_csv(d / "problemes.csv", index=False)
@@ -543,6 +634,10 @@ def principal(url, dossier, max_pages=2000):
         "problemes": {c: len(v) for c, v in sorted(pages_par_code.items(), key=lambda kv: -len(kv[1]))},
         "pages_par_gravite": {g: len(par_gravite.get(g, ())) for g in ("haute", "moyenne", "basse")},
         "constats": len(problemes), "liens_internes": len(liens),
+        "semantique": {"pages": len(semantique), "completes": sum(not s["manquants"] for s in semantique),
+                       "manquants": dict(Counter(m for s in semantique for m in s["manquants"].split(", ") if m).most_common()),
+                       "types_donnees_structurees": dict(Counter(t for s in semantique for t in s["donnees_structurees"].split(", ")
+                                                                 if t).most_common())},
     })
     (d / "resume.json").write_text(json.dumps(resume, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{resume['pages_html']} page(s) HTML ({resume['pages_sitemap_seules']} trouvée(s) seulement par le sitemap), "

@@ -109,3 +109,4 @@ dl.conseils { margin: 0 0 3.5mm; font-size: 8.4pt; }
 dl.conseils dt { font-weight: 700; margin-top: 1.8mm; break-after: avoid; }
 dl.conseils dd { margin: 0.4mm 0 0 4mm; color: var(--encre-2); }
 dl.conseils em { font-style: normal; font-weight: 700; color: var(--encre); }
+.encadre.alerte { background: #fdf0ea; border-left: 1.6mm solid var(--serieux); }
