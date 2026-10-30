@@ -22,6 +22,7 @@ erreurs=0
 while read -r url; do
   nom="$(slug "$url")"
   for strategie in mobile desktop; do
+    attendre_acces   # hébergeur qui bloque un temps le poste : Lighthouse mesurerait une page d'erreur
     options=(); [ "$strategie" = desktop ] && options=(--preset=desktop)
     if lighthouse "$url" "${options[@]}" --locale=fr --quiet \
         --chrome-flags="--headless=new --no-sandbox" \

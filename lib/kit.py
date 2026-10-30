@@ -11,6 +11,7 @@ Utilisable aussi en ligne de commande depuis les scripts shell :
                                      KIT_NAVIGATEUR_LIBRE=1 : CHROME_PATH accepté sans contrôle de version
   python3 -m kit version-navigateur CHEMIN → « Google Chrome 155.0… », « Chromium 157.0… » (« … snap » pour le snap)
   python3 -m kit node              → chemin de Node (celui du PATH s'il est assez récent, sinon une version de nvm)
+  python3 -m kit acces URL         → « ok » (code 0), sinon la raison du refus (code 1) : voir acces()
 """
 import csv
 import glob
@@ -91,6 +92,23 @@ def recuperer(url, methode="GET", delai=30, entetes=None):
         return e.code, url, b"", dict(e.headers or {})
     except Exception as e:  # noqa: BLE001 — toute erreur réseau est consignée comme « pas de réponse »
         return 0, url, str(e).encode(), {}
+
+
+# Réponses d'un hébergeur qui bloque un temps les visiteurs trop actifs (o2switch « Tiger Protect »,
+# pare-feu applicatifs…) : trop de requêtes (429) ou service indisponible (503)
+CODES_REFUS = {429: "trop de requêtes", 503: "service indisponible"}
+
+
+def acces(url, delai=20):
+    """"" si le site répond normalement (y compris par une redirection ou une erreur 404 ou 500), sinon
+    la raison du refus : code 429 ou 503, ou aucune réponse (connexion ou négociation TLS refusée,
+    comme quand un pare-feu bloque l'adresse du poste). Une seule requête GET, sans relance."""
+    statut, _, corps, _ = recuperer(url, delai=delai)
+    if statut in CODES_REFUS:
+        return f"code {statut} : {CODES_REFUS[statut]}"
+    if not statut:
+        return f"aucune réponse : {corps.decode('utf-8', 'replace')[:120]}"
+    return ""
 
 
 def lire_csv(chemin):
@@ -267,6 +285,10 @@ def _principal(argv):
         chemin = trouver()
         print(chemin or message(), file=sys.stdout if chemin else sys.stderr)
         return 0 if chemin else 1
+    if len(argv) == 3 and argv[1] == "acces":
+        raison = acces(argv[2])
+        print(raison or "ok")
+        return 1 if raison else 0
     commandes = {"url": normaliser_url, "domaine": domaine, "slug": slug, "version-navigateur": version_navigateur}
     if len(argv) != 3 or argv[1] not in commandes:
         print(__doc__, file=sys.stderr)

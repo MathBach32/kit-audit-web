@@ -59,6 +59,7 @@ nettoyer() {
 }
 trap 'nettoyer; exit 130' INT
 trap 'nettoyer; exit 143' TERM HUP
+attendre_acces
 # Unlighthouse exige un dossier de sortie qui lui soit propre ; il écrit aussi dans le dossier courant
 (cd "$SORTIE" && PUPPETEER_TMP_DIR="$TEMPORAIRE" exec setsid unlighthouse-ci --site "$SITE_URL" \
   --config-file "$KIT_RACINE/config/unlighthouse.config.mjs" --output-path "$SORTIE/rapport" --no-cache \
@@ -69,4 +70,7 @@ code=$?
 nettoyer
 trap - INT TERM HUP
 [ -s "$SORTIE/rapport/ci-result.json" ] || echec "Unlighthouse a échoué (code $code, voir journal.txt)"
-"$PYTHON" -m unlighthouse_resume "$SORTIE"
+"$PYTHON" -m unlighthouse_resume "$SORTIE" || echec "résumé d'Unlighthouse impossible"
+# Pages écartées par Unlighthouse (erreur, page refusée ou interstitielle) : consignées par le résumé
+[ -s "$SORTIE/non_mesurees.txt" ] && journal "attention : $(wc -l < "$SORTIE/non_mesurees.txt") page(s) non mesurée(s) (voir unlighthouse/non_mesurees.txt)"
+exit 0

@@ -9,6 +9,11 @@
 # Usage : bin/captures URL [--pages FICHIER] [--dossier DOSSIER]
 #   --pages  liste d'URL à capturer (défaut : accueil + 5 pages tirées du sitemap)
 #
+# Le navigateur part d'un profil vierge, propre à la commande : sans lui, il prendrait celui de
+# l'utilisateur (cookies, bandeaux déjà acceptés, verrou d'un navigateur ouvert). Avant chaque page,
+# le site doit répondre normalement (attendre_acces, lib/commun.sh) ; une capture manquée est refaite
+# une fois. Les messages du navigateur vont dans captures/navigateur.log.
+#
 # Sortie : captures/<page>_ordinateur.png et captures/<page>_mobile.png
 . "$(dirname "$(readlink -f "$0")")/../lib/commun.sh"
 OPTIONS="--pages"
@@ -16,15 +21,29 @@ lire_arguments "$@"
 exiger_navigateur
 preparer_sortie captures
 MOBILE_UA="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+PROFIL="$(mktemp -d -t kit-captures.XXXXXX)" || echec "dossier temporaire impossible à créer"
+trap 'rm -rf -- "$PROFIL"' EXIT
+# capturer URL FICHIER LARGEUR HAUTEUR [option…] : une capture, en 90 s au plus
+capturer() {
+  local url="$1" fichier="$2" largeur="$3" hauteur="$4"; shift 4
+  rm -f -- "$fichier"
+  timeout -k 5 90 "$CHROME_PATH" --headless=new --no-sandbox --user-data-dir="$PROFIL" --no-first-run \
+    --hide-scrollbars --virtual-time-budget=8000 --window-size="$largeur,$hauteur" "$@" \
+    --screenshot="$fichier" "$url" < /dev/null >> "$SORTIE/navigateur.log" 2>&1
+  [ -s "$fichier" ]
+}
 while read -r url; do
   nom="$(slug "$url")"
-  "$CHROME_PATH" --headless=new --no-sandbox --hide-scrollbars --virtual-time-budget=8000 \
-    --window-size=1366,900 --screenshot="$SORTIE/${nom}_ordinateur.png" "$url" < /dev/null 2>/dev/null
-  "$CHROME_PATH" --headless=new --no-sandbox --hide-scrollbars --virtual-time-budget=8000 \
-    --window-size=390,844 --user-agent="$MOBILE_UA" --screenshot="$SORTIE/${nom}_mobile.png" "$url" < /dev/null 2>/dev/null
+  for essai in 1 2; do
+    attendre_acces
+    ok=1
+    [ -s "$SORTIE/${nom}_ordinateur.png" ] || capturer "$url" "$SORTIE/${nom}_ordinateur.png" 1366 900 || ok=0
+    [ -s "$SORTIE/${nom}_mobile.png" ] || capturer "$url" "$SORTIE/${nom}_mobile.png" 390 844 --user-agent="$MOBILE_UA" || ok=0
+    [ "$ok" = 1 ] && break
+  done
   for format in ordinateur mobile; do
-    [ -s "$SORTIE/${nom}_$format.png" ] && journal "OK  $nom $format" || journal "ERR $nom $format : aucune capture"
+    [ -s "$SORTIE/${nom}_$format.png" ] && journal "OK  $nom $format" || journal "ERR $nom $format : aucune capture (voir navigateur.log)"
   done
 done < "$(pages_types 6)"
 # Un navigateur qui ne produit rien (CHROME_PATH accepté avec KIT_NAVIGATEUR_LIBRE=1, par exemple) est une panne
-compgen -G "$SORTIE/*.png" > /dev/null || echec "aucune capture produite par $CHROME_PATH"
+compgen -G "$SORTIE/*.png" > /dev/null || echec "aucune capture produite par $CHROME_PATH (voir captures/navigateur.log)"

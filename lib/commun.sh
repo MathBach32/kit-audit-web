@@ -13,6 +13,7 @@
 #   CHROME_PATH          navigateur imposé (défaut : Google Chrome ou Chromium détecté par lib/kit.py)
 #   KIT_NAVIGATEUR_LIBRE 1 : CHROME_PATH accepté sans contrôle de version (Brave, Microsoft Edge…)
 #   NVM_DIR              dossier de nvm où chercher Node s'il manque au PATH (défaut : ~/.nvm)
+#   KIT_PAUSES_ACCES     pauses en secondes quand le site refuse l'accès (défaut : « 60 120 240 480 »)
 
 set -uo pipefail
 
@@ -104,6 +105,10 @@ preparer_sortie() {
   [ -d "$SORTIE" ] && rm -rf -- "${SORTIE:?}"
   mkdir -p "$SORTIE"
   [ -s "$DOSSIER_AUDIT/site.txt" ] || echo "$SITE_URL" > "$DOSSIER_AUDIT/site.txt"
+  if [ -f "$DOSSIER_AUDIT/refus.tsv" ]; then   # refus consignés par une exécution précédente de l'outil
+    awk -F'\t' -v o="$outil" '$2 != o' "$DOSSIER_AUDIT/refus.tsv" > "$DOSSIER_AUDIT/refus.tsv.tmp"
+    mv -f "$DOSSIER_AUDIT/refus.tsv.tmp" "$DOSSIER_AUDIT/refus.tsv"
+  fi
   export SITE_URL SITE_DOMAINE DOSSIER_AUDIT SORTIE
   journal "$outil : $SITE_URL → $SORTIE"
 }
@@ -149,6 +154,31 @@ pages_types() {
 }
 
 slug() { "$PYTHON" -m kit slug "$1"; }
+
+# attendre_acces : avant une mesure par le navigateur, vérifie que le site répond normalement.
+# Certains hébergeurs bloquent un temps l'adresse du poste après de nombreuses requêtes (code 429 ou
+# 503, ou connexion TLS refusée) : le navigateur n'affiche alors qu'une page d'erreur, et les mesures
+# sont fausses ou absentes. On attend donc que le blocage cesse (pauses de KIT_PAUSES_ACCES). Chaque
+# refus est consigné dans <dossier>/refus.tsv (date, outil, raison, « levé » ou « persistant »), lu par
+# la synthèse. Après un refus persistant, la commande ne réattend plus (code 1, mesures à reprendre).
+attendre_acces() {
+  local raison pause
+  [ -n "${_ACCES_PERDU:-}" ] && { "$PYTHON" -m kit acces "$SITE_URL" > /dev/null && return 0; return 1; }
+  raison="$("$PYTHON" -m kit acces "$SITE_URL")" && return 0
+  for pause in ${KIT_PAUSES_ACCES:-60 120 240 480}; do
+    journal "le site refuse l'accès ($raison) : blocage probable par l'hébergeur, nouvel essai dans $pause s"
+    sleep "$pause"
+    if "$PYTHON" -m kit acces "$SITE_URL" > /dev/null; then
+      printf '%s\t%s\t%s\tlevé\n' "$(date +%FT%T)" "$(basename "$SORTIE")" "$raison" >> "$DOSSIER_AUDIT/refus.tsv"
+      journal "accès rétabli : reprise des mesures"
+      return 0
+    fi
+  done
+  printf '%s\t%s\t%s\tpersistant\n' "$(date +%FT%T)" "$(basename "$SORTIE")" "$raison" >> "$DOSSIER_AUDIT/refus.tsv"
+  journal "attention : le site refuse toujours l'accès ($raison) ; mesures suivantes faussées ou absentes, à relancer plus tard"
+  _ACCES_PERDU=1
+  return 1
+}
 
 # charger_cle_psi : lit PSI_API_KEY dans le fichier des secrets (sans l'exécuter ni l'exporter).
 charger_cle_psi() {
