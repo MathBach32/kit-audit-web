@@ -68,7 +68,7 @@ ERGONOMIE = [
     ("heading-order", "Titres hiérarchisés dans l'ordre", None),
     ("image-aspect-ratio", "Images affichées sans déformation", None),
     ("image-size-responsive", "Images assez nettes pour l'écran", None),
-    ("errors-in-console", "Aucune erreur JavaScript dans la page", None),
+    ("errors-in-console", "Aucune erreur signalée par le navigateur (script, fichier introuvable)", None),
     ("cumulative-layout-shift", "Mise en page stable au chargement (CLS de 0,1 au plus)", 0.1),
     ("total-blocking-time", "Page réactive pendant le chargement (blocage de 200 ms au plus)", 200),
 ]

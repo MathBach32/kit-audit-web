@@ -172,7 +172,7 @@ chaque processus.
 
 La section **« Ergonomie sur téléphone »** de la synthèse reprend, pour les pages types, les critères
 que Lighthouse mesure sur téléphone (zones à toucher, contraste, liens et boutons nommés, champs
-étiquetés, images, stabilité de la mise en page, réactivité, erreurs JavaScript) et la présence de
+étiquetés, images, stabilité de la mise en page, réactivité, erreurs signalées par le navigateur) et la présence de
 liens `tel:` et `mailto:`. Elle ne remplace pas un avis d'ergonomie rédigé en parcourant le site.
 
 Le dossier `tests/site-temoin` contient un petit site dont les défauts sont connus : il déclenche
