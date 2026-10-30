@@ -220,9 +220,15 @@ class Verification:
             self.avertissements.append("synthèse : pdftotext indisponible, texte du PDF non vérifié")
             return
         for titre in ("Vitesse d'affichage", "Référencement naturel", "Liens cassés", "Accessibilité",
-                      "Sécurité, domaine et DNS", "Méthode et outils", "Canonique vers une page en erreur ou redirigée"):
+                      "Sécurité, domaine et DNS", "Méthode et outils", "Canonique vers une page en erreur ou redirigée",
+                      "Balisage sémantique", "Champs manquants, page par page", "Ergonomie sur téléphone",
+                      "Zones à toucher assez grandes et espacées"):
             self.exiger(titre in texte, f"synthèse : « {titre} » absent du PDF")
         self.exiger("Erreur :" not in texte, "synthèse : une section a échoué (« Erreur : » dans le PDF)")
+        self.exiger("Relevés incomplets" not in texte, "synthèse : relevés incomplets signalés sur le site témoin")
+        v = self.lire_json("synthese/voyants.json")
+        domaines = {x["domaine"] for x in v.get("voyants", []) if x.get("couleur") != "gris"}
+        self.exiger({"Balisage sémantique", "Ergonomie"} <= domaines, f"synthèse : voyants {sorted(domaines)}")
 
     def lancer(self):
         for etape in (self.manifeste, self.seo, self.liens, self.accessibilite, self.inventaire, self.mesures, self.synthese):
